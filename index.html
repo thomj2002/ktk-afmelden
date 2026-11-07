@@ -1,0 +1,3704 @@
+﻿<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>KTK Kampen - Afmeldingen Dashboard</title>
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="icon" type="image/svg+xml" href="https://admin.ktkkampen.nl/uploads/KTK-logos/logo.svg">
+  <link rel="apple-touch-icon" href="https://admin.ktkkampen.nl/uploads/KTK-logos/logo.svg">
+  <link rel="manifest" href="./manifest-dashboard.json">
+  <meta name="theme-color" content="#1B2654">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ktk: {
+              navy: '#1B2654',
+              blue: '#28367B',
+              red: '#E30613',
+              light: '#BCE3F9',
+              bg: '#F4F6FA'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Montserrat', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #F4F6FA; }
+    h1, h2, h3, .font-display { font-family: 'Montserrat', sans-serif; }
+    .badge-geldig { background-color: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+    .badge-niet { background-color: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    .badge-bespreek { background-color: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
+    .badge-optijd { background-color: #f0f9ff; color: #075985; border: 1px solid #bae6fd; }
+    .badge-laat { background-color: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
+    .badge-zeerlaat { background-color: #fff1f2; color: #9f1239; border: 1px solid #fecdd3; font-weight: 700; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+  <script>
+    // Stuur ?page=afmelden op GitHub Pages automatisch door naar afmelden.html
+    (function() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if ((params.get('page') || '').toLowerCase() === 'afmelden') {
+          window.location.replace('./afmelden.html');
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <script>
+    // =========================================================================
+    // KTK GITHUB PAGES -> GOOGLE APPS SCRIPT API BRIDGE
+    // Laat alle google.script.run aanroepen via fetch() werken op GitHub Pages,
+    // zonder de bestaande Google Apps Script omgeving te verstoren.
+    // =========================================================================
+    (function() {
+      if (typeof window.google !== 'undefined' && window.google.script && window.google.script.run) {
+        return;
+      }
+
+      const KTK_API_URL = 'https://script.google.com/macros/s/AKfycbwhSIHa7asKuidwN5V31eK0GFrIV_zySqwW4AJsqw6pOmlAKLfaOLAcek_-uhy_qoFGGg/exec';
+
+      const API_METHODS = [
+        'getLedenInitData',
+        'setupMemberPin',
+        'loginMember',
+        'submitMemberAbsence',
+        'withdrawMemberAbsence',
+        'getDashboardAuthInit',
+        'setupDashboardPin',
+        'loginDashboard',
+        'getDashboardData',
+        'resetMemberPinByAdmin',
+        'setManualAbsenceJudgment',
+        'saveMemberByAdmin',
+        'deleteMemberByAdmin',
+        'saveConfigReasonsByAdmin',
+        'saveNormSettingsByAdmin'
+      ];
+
+      function createRunner(successHandler, failureHandler) {
+        const runner = {
+          withSuccessHandler: function(fn) {
+            return createRunner(fn, failureHandler);
+          },
+          withFailureHandler: function(fn) {
+            return createRunner(successHandler, fn);
+          }
+        };
+
+        API_METHODS.forEach(function(methodName) {
+          runner[methodName] = function() {
+            const args = Array.prototype.slice.call(arguments);
+            fetch(KTK_API_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({ action: methodName, args: args }),
+              redirect: 'follow'
+            })
+              .then(function(res) {
+                if (!res.ok) throw new Error('Netwerkfout (' + res.status + ')');
+                return res.json();
+              })
+              .then(function(data) {
+                if (data && data.ok) {
+                  if (typeof successHandler === 'function') {
+                    successHandler(data.result);
+                  }
+                } else {
+                  const errMsg = (data && data.error) ? data.error : 'Er is een onbekende fout opgetreden.';
+                  if (typeof failureHandler === 'function') {
+                    failureHandler(new Error(errMsg));
+                  } else {
+                    console.error('KTK API fout:', errMsg);
+                  }
+                }
+              })
+              .catch(function(err) {
+                if (typeof failureHandler === 'function') {
+                  failureHandler(err);
+                } else {
+                  console.error('KTK verbinding mislukt:', err);
+                }
+              });
+          };
+        });
+
+        return runner;
+      }
+
+      window.google = {
+        script: {
+          run: createRunner(null, null)
+        }
+      };
+    })();
+  </script>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+
+  <!-- Header in KTK Kampen huisstijl -->
+  <header class="bg-[#1B2654] text-white border-b-[3px] border-[#E30613] shadow-md sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4">
+      
+      <!-- Logo + Titel + Mobiele Actieknoppen -->
+      <div class="flex items-center justify-between w-full sm:w-auto">
+        <div class="flex items-center space-x-3 min-w-0">
+          <div class="h-9 sm:h-11 w-auto flex-shrink-0 flex items-center justify-center">
+            <img src="https://admin.ktkkampen.nl/uploads/KTK-logos/logo.svg" alt="KTK Kampen" class="h-9 sm:h-11 w-auto object-contain" />
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center space-x-2">
+              <h1 class="text-sm sm:text-lg font-extrabold tracking-tight uppercase truncate">Afmeldingen</h1>
+              <span class="bg-[#E30613] text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0">Dashboard</span>
+            </div>
+            <p class="text-[11px] text-slate-300 font-medium truncate">Kamper Trompetter Korps &bull; Friendship. Music. Progress.</p>
+          </div>
+        </div>
+
+        <!-- Mobiele snelknoppen (verversen + uitloggen) zodat header compact schaalt -->
+        <div id="mobile-header-actions" class="hidden flex sm:hidden items-center space-x-1.5 flex-shrink-0">
+          <button onclick="refreshData()" title="Gegevens verversen" class="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/10 transition flex items-center justify-center">
+            <svg id="refresh-icon-mob" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          </button>
+          <button onclick="logoutDashboard()" title="Uitloggen" class="p-2 bg-white/10 hover:bg-[#E30613] text-white rounded-lg border border-white/10 transition flex items-center justify-center">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Navigatie Knoppen, Ingelogd Lid & Ververs knop -->
+      <div id="header-controls" class="hidden flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
+        <div id="admin-user-badge" class="hidden lg:flex items-center space-x-2 bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 text-xs text-slate-200">
+          <svg class="w-3.5 h-3.5 text-[#BCE3F9]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7 7z"/></svg>
+          <span id="admin-user-name" class="font-semibold text-white">-</span>
+          <span id="admin-user-role" class="text-[10px] bg-[#BCE3F9] text-[#1B2654] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide">Bestuur</span>
+        </div>
+
+        <div id="nav-tabs-grid" class="grid grid-cols-2 sm:flex bg-black/25 p-1 rounded-lg border border-white/10 w-full sm:w-auto gap-0.5">
+          <button id="nav-btn-1" onclick="switchPage(1)" class="px-2.5 sm:px-3.5 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition flex items-center justify-center space-x-1.5 bg-[#E30613] text-white shadow-sm">
+            <svg class="w-3.5 h-3.5 flex-shrink-0 hidden sm:inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            <span>Per Datum</span>
+          </button>
+          <button id="nav-btn-2" onclick="switchPage(2)" class="px-2.5 sm:px-3.5 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition flex items-center justify-center space-x-1.5 text-slate-300 hover:text-white">
+            <svg class="w-3.5 h-3.5 flex-shrink-0 hidden sm:inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7 7z"/></svg>
+            <span>Per Persoon</span>
+          </button>
+          <button id="nav-btn-3" onclick="switchPage(3)" class="hidden px-2.5 sm:px-3.5 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition flex items-center justify-center space-x-1.5 text-slate-300 hover:text-white">
+            <span>Beoordelen</span>
+            <span id="inbox-nav-badge" class="bg-[#E30613] text-white text-[10px] font-extrabold px-1.5 py-0.2 rounded-full">0</span>
+          </button>
+          <button id="nav-btn-4" onclick="switchPage(4)" class="hidden px-2.5 sm:px-3.5 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition flex items-center justify-center space-x-1.5 text-slate-300 hover:text-white">
+            <svg class="w-3.5 h-3.5 flex-shrink-0 hidden sm:inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            <span>Beheer</span>
+          </button>
+        </div>
+
+        <!-- Realtime Verversen (Desktop) -->
+        <button onclick="refreshData()" title="Gegevens verversen" class="hidden sm:flex p-2 bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white rounded-lg border border-white/10 transition items-center justify-center">
+          <svg id="refresh-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </button>
+
+        <!-- Uitloggen (Desktop) -->
+        <button onclick="logoutDashboard()" title="Uitloggen" class="hidden sm:inline-flex px-3 py-2 bg-white/10 hover:bg-[#E30613] text-slate-200 hover:text-white rounded-lg border border-white/10 transition text-xs font-semibold">
+          Uitloggen
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Hoofdinhoud -->
+  <main class="max-w-7xl w-full mx-auto p-3 sm:p-6 flex-1 space-y-4 sm:space-y-6">
+
+    <!-- ============================================== -->
+    <!-- INLOGSCHERM VOOR BESTUUR & SECTIEHOOFDEN       -->
+    <!-- ============================================== -->
+    <div id="dashboard-auth-view" class="max-w-md mx-auto mt-4 sm:mt-10 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="bg-[#1B2654] px-5 py-4 text-white border-b-[3px] border-[#E30613]">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
+            <svg class="w-5 h-5 text-[#BCE3F9]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+          </div>
+          <div>
+            <h2 class="text-sm sm:text-base font-extrabold uppercase tracking-wide">Bestuur &amp; Sectiehoofden</h2>
+            <p class="text-[11px] text-slate-300">Log in met je naam en 4-cijferige pincode</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-4 sm:p-5 space-y-4">
+        <div id="dash-auth-unauthorized-banner" class="hidden bg-orange-50 border border-orange-300 text-orange-900 rounded-lg p-3 text-xs space-y-1">
+          <div class="font-bold">Alleen voor Sectiehoofden &amp; Bestuur</div>
+          <p id="dash-auth-unauthorized-text">Je bent op dit toestel ingelogd als lid. Kies hieronder je bestuurs- of sectiehoofd-account om het dashboard te openen.</p>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+            1. Kies je naam
+          </label>
+          <select id="dash-login-select" onchange="onSelectDashboardAdmin()" class="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+            <option value="">-- Bezig met laden... --</option>
+          </select>
+        </div>
+
+        <div id="dash-pin-box" class="hidden space-y-3 pt-3 border-t border-slate-100">
+          <div id="dash-pin-setup-banner" class="hidden bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-[#1B2654]">
+            <span class="font-bold block mb-0.5">Eerste keer inloggen</span>
+            Kies een persoonlijke pincode van <b>4 cijfers</b>. Deze code gebruik je voor zowel dit dashboard als de afmeld-app.
+          </div>
+
+          <div>
+            <label id="dash-pin-label" class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+              2. Voer je 4-cijferige pincode in:
+            </label>
+            <input type="password" id="dash-pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••"
+              onkeydown="if(event.key==='Enter') submitDashboardAuth()"
+              class="w-full text-center tracking-[0.5em] text-xl font-bold rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#28367B]" />
+          </div>
+
+          <div id="dash-auth-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-xs font-semibold"></div>
+
+          <button type="button" id="dash-auth-btn" onclick="submitDashboardAuth()" class="w-full py-2.5 rounded-lg bg-[#E30613] hover:bg-red-700 text-white font-bold uppercase tracking-wider text-xs sm:text-sm shadow-sm transition flex items-center justify-center space-x-2">
+            <span id="dash-auth-btn-text">Dashboard Openen</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- PAGINA 1: AFMELDINGEN PER DATUM                -->
+    <!-- ============================================== -->
+    <div id="page-1" class="hidden space-y-4 sm:space-y-6">
+      
+      <!-- Bovenbalk: Maandkalender & Totaal Afgemeld Card -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        
+        <!-- Kalender Component (2 kolommen op desktop) -->
+        <div class="lg:col-span-2 bg-white rounded-xl p-3.5 sm:p-5 shadow-sm border border-slate-200">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <span class="text-xs font-extrabold uppercase tracking-wider text-[#1B2654] font-display">Kalender</span>
+                <span class="text-xs text-slate-400 hidden sm:inline">&bull; Selecteer een datum</span>
+              </div>
+              <button onclick="jumpToCurrentMonth()" class="sm:hidden text-[11px] font-semibold text-[#28367B] bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition">
+                Vandaag
+              </button>
+            </div>
+            
+            <!-- Maand navigatie -->
+            <div class="flex items-center justify-between sm:justify-end space-x-1.5">
+              <div class="flex items-center justify-between w-full sm:w-auto bg-slate-50 border border-slate-200 rounded-lg p-0.5">
+                <button onclick="changeMonth(-1)" class="p-1.5 rounded-md hover:bg-white text-slate-600 transition" title="Vorige maand">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                </button>
+                <span id="calendar-month-year" class="text-xs sm:text-sm font-bold text-slate-800 min-w-[125px] text-center px-2">Oktober 2026</span>
+                <button onclick="changeMonth(1)" class="p-1.5 rounded-md hover:bg-white text-slate-600 transition" title="Volgende maand">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </button>
+              </div>
+              <button onclick="jumpToCurrentMonth()" class="hidden sm:inline-block text-[11px] font-semibold text-[#1B2654] bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-200 transition">
+                Vandaag
+              </button>
+            </div>
+          </div>
+
+          <!-- Dagen van de week -->
+          <div class="grid grid-cols-7 gap-1 text-center text-[10px] sm:text-[11px] font-bold uppercase text-slate-400 mt-3 mb-1.5">
+            <span>Ma</span><span>Di</span><span>Wo</span><span>Do</span><span>Vr</span><span>Za</span><span>Zo</span>
+          </div>
+
+          <!-- Kalender Dagen Grid -->
+          <div id="calendar-days-grid" class="grid grid-cols-7 gap-1 sm:gap-1.5">
+            <!-- Dynamisch opgebouwd via JS -->
+          </div>
+
+          <!-- Kalender Legenda -->
+          <div class="mt-3.5 pt-2.5 border-t border-slate-100 grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-x-4 gap-y-1.5 text-[10px] font-medium text-slate-500">
+            <span class="inline-flex items-center space-x-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[#28367B] inline-block flex-shrink-0"></span><span class="truncate">Repetitie afmeldingen</span></span>
+            <span class="inline-flex items-center space-x-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[#E30613] inline-block flex-shrink-0"></span><span class="truncate">Optreden afmeldingen</span></span>
+            <span class="inline-flex items-center space-x-1.5"><span class="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block flex-shrink-0"></span><span class="truncate">Voorbehoud (wacht op agenda)</span></span>
+            <span class="inline-flex items-center space-x-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block flex-shrink-0"></span><span class="truncate">Agendapunt (0 afmeldingen)</span></span>
+          </div>
+        </div>
+
+        <!-- Geselecteerde Datum & Bezetting Card -->
+        <div class="bg-[#1B2654] text-white rounded-xl p-4 sm:p-5 shadow-sm flex flex-col justify-between border-t-4 border-[#E30613]">
+          <div>
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-[11px] font-bold uppercase tracking-wider text-[#BCE3F9]">Geselecteerde Datum</span>
+              <span id="event-type-badge" class="px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider bg-[#E30613] text-white">
+                Repetitie
+              </span>
+            </div>
+            
+            <h2 id="selected-date-display" class="text-lg sm:text-xl font-extrabold text-white mt-2 leading-snug">
+              -
+            </h2>
+            <p id="selected-day-subtext" class="text-xs text-slate-300 font-medium mt-1 break-words">
+              -
+            </p>
+          </div>
+
+          <div class="mt-5 pt-4 border-t border-white/10 grid grid-cols-2 gap-3 items-end">
+            <div>
+              <span class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-300 block">Totaal Afgemeld</span>
+              <span id="kpi-total-display" class="text-3xl sm:text-4xl font-black text-white tracking-tight font-display">0</span>
+              <span id="kpi-total-sublabel" class="text-[11px] text-slate-300 font-medium block">leden afwezig</span>
+            </div>
+            <div class="text-right bg-white/10 border border-white/10 rounded-lg px-3 py-2">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-[#BCE3F9] block">Verwacht Aanwezig</span>
+              <span id="kpi-present-display" class="text-base sm:text-lg font-extrabold text-white">-</span>
+              <span id="kpi-present-pct" class="text-[10px] text-emerald-300 font-semibold block">100% bezetting</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Snelkoppeling naar Bestuur Voorraadbak (alleen zichtbaar voor Bestuur indien er openstaande afmeldingen zijn) -->
+      <div id="bestuur-inbox-callout-p1" class="hidden bg-white border border-slate-200 border-l-4 border-l-[#E30613] rounded-xl p-3.5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div class="text-xs text-slate-700">
+          <span class="font-extrabold text-[#1B2654] uppercase tracking-wide">Beoordelingsvoorraad Bestuur:</span>
+          <span class="ml-1">Er staan momenteel <strong id="inbox-callout-count-p1" class="text-[#E30613]">0</strong> binnengekomen afmeldingen klaar om te beoordelen.</span>
+        </div>
+        <button onclick="switchPage(3)" class="self-start sm:self-auto px-3 py-1.5 rounded-lg bg-[#1B2654] hover:bg-[#28367B] text-white text-xs font-bold uppercase tracking-wider transition flex-shrink-0">
+          Open voorraadbak
+        </button>
+      </div>
+
+      <!-- Sectie Overzicht (Grid) -->
+      <div>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+          <div class="flex items-center space-x-2">
+            <h3 class="text-xs sm:text-sm font-extrabold text-[#1B2654] uppercase tracking-wider">Afmeldingen per Sectie</h3>
+            <span id="sections-active-count" class="text-[11px] bg-slate-200 text-slate-700 font-semibold px-2 py-0.5 rounded-md">0 secties</span>
+          </div>
+          <!-- Maatwerk disclaimer vlak bij de afmeldingen -->
+          <div class="text-[11px] text-slate-600 bg-white border border-slate-200 border-l-4 border-l-[#28367B] px-3 py-1.5 rounded-lg shadow-xs">
+            Het systeem is zwart-wit, maar of een afmelding geoorloofd is of niet blijft maatwerk.
+          </div>
+        </div>
+
+        <!-- Grid van secties -->
+        <div id="section-bins-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
+          <!-- Dynamisch opgebouwd per sectie -->
+        </div>
+
+        <!-- Lege status indien geen afmeldingen -->
+        <div id="no-absences-banner" class="hidden bg-white border border-slate-200 rounded-xl p-6 sm:p-8 text-center shadow-sm">
+          <div id="no-absences-icon" class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-2.5 font-bold text-lg">&#10003;</div>
+          <h4 id="no-absences-title" class="text-sm sm:text-base font-bold text-slate-800">Geen afmeldingen voor deze datum</h4>
+          <p id="no-absences-desc" class="text-xs text-slate-500 mt-1">Alle korpsleden staan als aanwezig geregistreerd.</p>
+        </div>
+
+        <!-- Status overige secties zonder afmeldingen -->
+        <div id="present-sections-banner" class="mt-3.5 bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-600 flex flex-wrap items-center gap-1.5 shadow-sm">
+          <span class="font-bold text-emerald-700">Volledig aanwezig:</span>
+          <span id="present-sections-list" class="text-slate-600">Geen</span>
+        </div>
+
+        <!-- Voorbehoud voor deze datum (wacht op Socie-agenda) -->
+        <div id="voorbehoud-date-section" class="hidden mt-4 bg-orange-50/70 border border-orange-200 rounded-xl p-3.5 sm:p-4 shadow-sm">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-orange-200/80">
+            <div>
+              <div class="flex items-center space-x-2">
+                <h4 class="text-xs sm:text-sm font-extrabold text-orange-950 uppercase tracking-wider">Alvast doorgegeven (wacht op agenda)</h4>
+                <span id="voorbehoud-date-count" class="bg-orange-200 text-orange-950 text-[11px] font-bold px-2 py-0.5 rounded-md">0</span>
+              </div>
+              <p class="text-[11px] text-orange-800 mt-0.5">
+                Leden die vooraf hebben gemeld niet te kunnen. Wordt automatisch verwerkt zodra er een activiteit in de agenda verschijnt.
+              </p>
+            </div>
+          </div>
+          <div id="voorbehoud-date-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+          </div>
+        </div>
+
+        <!-- Ingetrokken afmeldingen voor deze datum -->
+        <div id="withdrawn-date-section" class="hidden mt-4 bg-white border border-slate-200 rounded-xl p-3.5 sm:p-4 shadow-sm">
+          <div class="flex items-center justify-between pb-2.5 border-b border-slate-100">
+            <div class="flex items-center space-x-2">
+              <h4 class="text-xs sm:text-sm font-extrabold text-slate-700 uppercase tracking-wider">Ingetrokken afmeldingen</h4>
+              <span id="withdrawn-date-count" class="bg-slate-100 text-slate-700 text-[11px] font-semibold px-2 py-0.5 rounded-md">0</span>
+            </div>
+            <span class="text-[11px] text-emerald-700 font-medium">Alsnog aanwezig</span>
+          </div>
+          <div id="withdrawn-date-list" class="grid grid-cols-1 md:grid-cols-2 gap-2.5 mt-3">
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================== -->
+    <!-- PAGINA 2: OVERZICHT PER PERSOON                -->
+    <!-- ============================================== -->
+    <div id="page-2" class="space-y-4 sm:space-y-5 hidden">
+      
+      <!-- Filters (Mobielvriendelijk uitgelijnd) -->
+      <div class="bg-white p-3.5 sm:p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Sectie</label>
+            <select id="person-sectie-filter" onchange="renderPage2()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+              <option value="ALL">Alle secties</option>
+              <option value="Slagwerk">Slagwerk</option>
+              <option value="Trompet">Trompet</option>
+              <option value="Trombone">Trombone</option>
+              <option value="Sousafoon">Sousafoon</option>
+              <option value="Mellofoon">Mellofoon</option>
+              <option value="Bariton">Bariton</option>
+              <option value="Maitre">Maitre</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Periode (t/m vandaag)</label>
+            <select id="person-period-filter" onchange="renderPage2()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+              <option value="rolling" selected>Afgelopen 9 maanden</option>
+              <option value="90d">Afgelopen 90 dagen</option>
+              <option value="season">Lopend seizoen</option>
+              <option value="all">Volledige historie</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Zoek lid</label>
+            <input type="text" id="person-search" onkeyup="renderPage2()" placeholder="Naam..." class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+          </div>
+
+          <div class="flex items-end pb-1">
+            <label class="inline-flex items-center space-x-2 text-xs font-medium text-slate-700 cursor-pointer select-none">
+              <input type="checkbox" id="person-only-absent" onchange="renderPage2()" checked class="w-4 h-4 rounded text-[#28367B] focus:ring-[#28367B]">
+              <span>Alleen leden met afmeldingen</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Aankomende Optredens Bezetting op Pagina 2 -->
+      <div class="bg-white border border-slate-200 rounded-xl p-3.5 sm:p-4 shadow-sm">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+          <div>
+            <h3 class="text-xs sm:text-sm font-extrabold text-[#1B2654] uppercase tracking-wider">Verwachte bezetting aankomende optredens</h3>
+            <p class="text-[11px] text-slate-500">Actuele verwachte opkomst voor geplande optredens in de agenda.</p>
+          </div>
+          <span id="upcoming-optredens-count-p2" class="text-[11px] bg-red-50 text-[#E30613] border border-red-200 font-bold px-2.5 py-0.5 rounded-md self-start sm:self-auto flex-shrink-0">0 gepland</span>
+        </div>
+        <div id="upcoming-optredens-list-p2" class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+        </div>
+      </div>
+
+      <!-- KPI Scorecards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
+        <div class="bg-white border border-slate-200 rounded-xl p-3.5 sm:p-4 shadow-sm border-l-4 border-l-[#1B2654]">
+          <span class="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider block truncate">Actieve Leden</span>
+          <div class="text-2xl sm:text-3xl font-extrabold text-[#1B2654] mt-1 font-display" id="kpi-members-count">0</div>
+          <span class="text-[11px] text-slate-400 font-medium block truncate">spelende leden</span>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-3.5 sm:p-4 shadow-sm border-l-4 border-l-[#28367B]">
+          <span class="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider block truncate">Met Afmelding</span>
+          <div class="text-2xl sm:text-3xl font-extrabold text-[#28367B] mt-1 font-display" id="kpi-members-absent">0</div>
+          <span class="text-[11px] text-slate-500 font-medium block truncate" id="kpi-avg-weighted">gem. 100% aanwezig</span>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-3.5 sm:p-4 shadow-sm border-l-4 border-l-orange-500">
+          <span class="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider block truncate">Aandacht (Norm)</span>
+          <div class="text-2xl sm:text-3xl font-extrabold text-[#E30613] mt-1 font-display" id="kpi-flagged-count">0</div>
+          <span class="text-[11px] text-slate-500 font-medium block truncate" id="kpi-flagged-sub">0 rood &bull; 0 oranje</span>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-3.5 sm:p-4 shadow-sm border-l-4 border-l-slate-400">
+          <span class="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider block truncate">Registraties</span>
+          <div class="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1 font-display" id="kpi-total-absences">0</div>
+          <span class="text-[11px] text-slate-400 font-medium block truncate">in gekozen periode</span>
+        </div>
+      </div>
+
+      <!-- Norm Overzichtsbalk + Maatwerk Disclaimer vlak boven de ledentabel -->
+      <div class="bg-white border border-slate-200 rounded-xl p-3.5 space-y-2.5 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span class="font-bold uppercase tracking-wider text-[#1B2654]">Norm:</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><b>Groen:</b> &ge;<span id="norm-lbl-groen">90</span>%</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-orange-500"></span><b class="text-orange-700">Oranje:</b> <span id="norm-lbl-oranje">70-90</span>% of <span id="norm-lbl-ng">2</span>+ niet-geldig</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#E30613]"></span><b class="text-[#E30613]">Rood:</b> &lt;<span id="norm-lbl-rood">70</span>% of <span id="norm-lbl-opt">2</span>+ optredens</span>
+          </div>
+          <div class="text-slate-500 text-[10px] sm:text-[11px]">
+            <b>Weging:</b> Repetitie = <span id="norm-lbl-w-rep">1</span> pt &bull; Optreden = <span id="norm-lbl-w-opt">3</span> pt
+          </div>
+        </div>
+        <div class="pt-2 border-t border-slate-100 text-[11px] text-slate-600 flex items-center justify-between flex-wrap gap-2">
+          <span><strong>Toelichting:</strong> Het systeem is zwart-wit, maar of een afmelding geoorloofd is of niet blijft maatwerk.</span>
+          <span id="bestuur-hint-p2" class="hidden text-[11px] font-semibold text-[#28367B]">Klik op een lid om individuele afmeldingen handmatig te beoordelen</span>
+        </div>
+      </div>
+
+      <!-- Snelfilters (Horizontaal scrolbaar op mobiel zodat het nooit rommelig breekt) -->
+      <div class="bg-white p-2.5 sm:p-3 rounded-xl shadow-sm border border-slate-200 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1 flex-shrink-0">Filter:</span>
+        <button id="qf-all" onclick="setQuickFilter('ALL')" class="px-2.5 py-1.5 rounded-lg font-semibold text-xs transition whitespace-nowrap bg-[#1B2654] text-white flex items-center space-x-1.5 flex-shrink-0">
+          <span>Alle</span>
+          <span id="qf-count-all" class="bg-white/20 text-white text-[10px] px-1.5 py-0.2 rounded font-bold">0</span>
+        </button>
+        <button id="qf-rood" onclick="setQuickFilter('ROOD')" class="px-2.5 py-1.5 rounded-lg font-semibold text-xs transition whitespace-nowrap bg-slate-50 text-[#E30613] border border-slate-200 hover:bg-red-50 flex items-center space-x-1.5 flex-shrink-0">
+          <span class="w-2 h-2 rounded-full bg-[#E30613]"></span>
+          <span>Rood</span>
+          <span id="qf-count-rood" class="bg-red-100 text-[#E30613] text-[10px] px-1.5 py-0.2 rounded font-bold">0</span>
+        </button>
+        <button id="qf-oranje" onclick="setQuickFilter('ORANJE')" class="px-2.5 py-1.5 rounded-lg font-semibold text-xs transition whitespace-nowrap bg-slate-50 text-orange-700 border border-slate-200 hover:bg-orange-50 flex items-center space-x-1.5 flex-shrink-0">
+          <span class="w-2 h-2 rounded-full bg-orange-500"></span>
+          <span>Oranje</span>
+          <span id="qf-count-oranje" class="bg-orange-100 text-orange-800 text-[10px] px-1.5 py-0.2 rounded font-bold">0</span>
+        </button>
+        <button id="qf-groen" onclick="setQuickFilter('GROEN')" class="px-2.5 py-1.5 rounded-lg font-semibold text-xs transition whitespace-nowrap bg-slate-50 text-emerald-800 border border-slate-200 hover:bg-emerald-50 flex items-center space-x-1.5 flex-shrink-0">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span>Groen</span>
+          <span id="qf-count-groen" class="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0.2 rounded font-bold">0</span>
+        </button>
+        <button id="qf-optreden" onclick="setQuickFilter('OPTREDEN')" class="px-2.5 py-1.5 rounded-lg font-semibold text-xs transition whitespace-nowrap bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 flex items-center space-x-1.5 flex-shrink-0">
+          <span>Optreden gemist</span>
+          <span id="qf-count-optreden" class="bg-slate-200 text-slate-800 text-[10px] px-1.5 py-0.2 rounded font-bold">0</span>
+        </button>
+        <button id="qf-laat" onclick="setQuickFilter('LAAT')" class="px-2.5 py-1.5 rounded-lg font-semibold text-xs transition whitespace-nowrap bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 flex items-center space-x-1.5 flex-shrink-0">
+          <span>Laat / Zeer laat</span>
+          <span id="qf-count-laat" class="bg-slate-200 text-slate-800 text-[10px] px-1.5 py-0.2 rounded font-bold">0</span>
+        </button>
+        <button id="qf-perfect" onclick="setQuickFilter('PERFECT')" class="px-2.5 py-1.5 rounded-lg font-semibold text-xs transition whitespace-nowrap bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 flex items-center space-x-1.5 flex-shrink-0">
+          <span>100% Aanwezig</span>
+          <span id="qf-count-perfect" class="bg-slate-200 text-slate-800 text-[10px] px-1.5 py-0.2 rounded font-bold">0</span>
+        </button>
+      </div>
+
+      <!-- Leden Overzichtstabel -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-3.5 sm:p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+          <div class="flex items-center space-x-2">
+            <h2 class="text-xs sm:text-sm font-extrabold text-[#1B2654] uppercase tracking-wider">Overzicht per Lid</h2>
+            <span class="text-[11px] bg-slate-200 text-slate-700 font-semibold px-2 py-0.5 rounded-md" id="person-table-count">0 getoond</span>
+          </div>
+
+          <!-- Mobiele sorteer selectie -->
+          <div class="sm:hidden flex items-center space-x-1.5">
+            <span class="text-[10px] text-slate-500 font-bold uppercase">Sorteer:</span>
+            <select id="mobile-sort-select" onchange="sortPersonTable(this.value, true)" class="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800">
+              <option value="default">Norm (Rood/Oranje eerst)</option>
+              <option value="gewogenPct">Gewogen %</option>
+              <option value="naam">Naam (A-Z)</option>
+              <option value="total">Aantal afmeldingen</option>
+              <option value="optredens">Optredens gemist</option>
+              <option value="datum">Laatste datum</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Desktop tabel -->
+        <div class="hidden sm:block overflow-x-auto">
+          <table class="w-full text-left text-xs sm:text-sm divide-y divide-slate-200">
+            <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[11px] tracking-wider select-none">
+              <tr>
+                <th onclick="sortPersonTable('naam')" class="py-3 px-4 cursor-pointer hover:bg-slate-100 transition">
+                  <div class="flex items-center space-x-1"><span>Lid</span><span id="th-sort-naam" class="text-slate-400 text-[10px]">&#8645;</span></div>
+                </th>
+                <th onclick="sortPersonTable('sectie')" class="py-3 px-3 cursor-pointer hover:bg-slate-100 transition">
+                  <div class="flex items-center space-x-1"><span>Sectie</span><span id="th-sort-sectie" class="text-slate-400 text-[10px]">&#8645;</span></div>
+                </th>
+                <th onclick="sortPersonTable('gewogenPct')" class="py-3 px-3 text-center cursor-pointer hover:bg-slate-100 transition">
+                  <div class="flex items-center justify-center space-x-1"><span>Gewogen %</span><span id="th-sort-gewogenPct" class="text-slate-400 text-[10px]">&#8645;</span></div>
+                </th>
+                <th onclick="sortPersonTable('total')" class="py-3 px-3 text-center cursor-pointer hover:bg-slate-100 transition">
+                  <div class="flex items-center justify-center space-x-1"><span>Totaal</span><span id="th-sort-total" class="text-slate-400 text-[10px]">&#8645;</span></div>
+                </th>
+                <th onclick="sortPersonTable('nietAcceptabel')" class="py-3 px-3 text-center cursor-pointer hover:bg-slate-100 transition">
+                  <div class="flex items-center justify-center space-x-1"><span>Niet geldig</span><span id="th-sort-nietAcceptabel" class="text-slate-400 text-[10px]">&#8645;</span></div>
+                </th>
+                <th onclick="sortPersonTable('optredens')" class="py-3 px-3 text-center cursor-pointer hover:bg-slate-100 transition">
+                  <div class="flex items-center justify-center space-x-1"><span>Optredens</span><span id="th-sort-optredens" class="text-slate-400 text-[10px]">&#8645;</span></div>
+                </th>
+                <th onclick="sortPersonTable('laat')" class="py-3 px-3 text-center cursor-pointer hover:bg-slate-100 transition">
+                  <div class="flex items-center justify-center space-x-1"><span>Laat</span><span id="th-sort-laat" class="text-slate-400 text-[10px]">&#8645;</span></div>
+                </th>
+                <th onclick="sortPersonTable('datum')" class="py-3 px-3 cursor-pointer hover:bg-slate-100 transition">
+                  <div class="flex items-center space-x-1"><span>Laatste datum</span><span id="th-sort-datum" class="text-slate-400 text-[10px]">&#8645;</span></div>
+                </th>
+                <th onclick="sortPersonTable('reden')" class="py-3 px-3 cursor-pointer hover:bg-slate-100 transition">
+                  <div class="flex items-center space-x-1"><span>Meest voorkomend</span><span id="th-sort-reden" class="text-slate-400 text-[10px]">&#8645;</span></div>
+                </th>
+                <th onclick="sortPersonTable('status')" class="py-3 px-4 cursor-pointer hover:bg-slate-100 transition">
+                  <div class="flex items-center space-x-1"><span>Norm / Status</span><span id="th-sort-status" class="text-slate-400 text-[10px]">&#8645;</span></div>
+                </th>
+              </tr>
+            </thead>
+            <tbody id="person-table-body-desktop" class="divide-y divide-slate-100">
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Mobiele kaartjes -->
+        <div id="person-cards-mobile" class="sm:hidden divide-y divide-slate-100 p-2.5 space-y-2.5">
+        </div>
+      </div>
+
+      <!-- Detail Drawer voor lidhistorie (+ Handmatig beoordelen voor Bestuur) -->
+      <div id="member-drawer" class="hidden bg-white border-2 border-[#1B2654] rounded-xl p-4 sm:p-5 shadow-md space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200">
+          <div>
+            <h3 class="text-sm sm:text-base font-extrabold text-[#1B2654] uppercase" id="drawer-member-name">Lid Historie</h3>
+            <p class="text-xs text-slate-500" id="drawer-member-sub">Alle geregistreerde afmeldingen</p>
+          </div>
+          <div class="flex items-center flex-wrap gap-2">
+            <button id="drawer-reset-pin-btn" onclick="resetSelectedMemberPin()" class="hidden text-orange-900 hover:bg-orange-200 text-xs font-semibold px-3 py-1.5 bg-orange-100 border border-orange-300 rounded-lg transition">
+              Pincode resetten
+            </button>
+            <span id="drawer-no-pin-badge" class="hidden text-[11px] font-medium text-slate-500 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
+              Geen pincode ingesteld
+            </span>
+            <button onclick="closeMemberDrawer()" class="text-slate-600 hover:text-slate-900 text-xs font-bold px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg transition">Sluiten</button>
+          </div>
+        </div>
+
+        <!-- Norm & Tijdigheid samenvatting voor dit lid -->
+        <div id="drawer-norm-summary" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        </div>
+
+        <!-- Verstreken afmeldingen van dit lid in de geselecteerde periode -->
+        <div>
+          <h4 class="text-xs font-extrabold uppercase tracking-wider text-[#1B2654] mb-2">Afmeldingen in gekozen periode (t/m vandaag)</h4>
+          <div class="overflow-x-auto bg-slate-50 rounded-lg border border-slate-200 p-2 sm:p-3">
+            <table class="w-full text-xs text-left min-w-[540px]">
+              <thead>
+                <tr class="text-slate-500 border-b border-slate-200 font-semibold">
+                  <th class="pb-2">Datum</th>
+                  <th class="pb-2">Type</th>
+                  <th class="pb-2">Reden</th>
+                  <th class="pb-2">Beoordeling / Validiteit</th>
+                  <th class="pb-2">Tijdigheid</th>
+                  <th class="pb-2">Toelichting</th>
+                </tr>
+              </thead>
+              <tbody id="drawer-table-body" class="divide-y divide-slate-200/60">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Komende afmeldingen -->
+        <div id="drawer-future-section" class="hidden">
+          <h4 class="text-xs font-extrabold uppercase tracking-wider text-[#28367B] mb-2">Komende afmeldingen</h4>
+          <div class="overflow-x-auto bg-slate-50 rounded-lg border border-slate-200 p-2 sm:p-3">
+            <table class="w-full text-xs text-left min-w-[500px]">
+              <thead>
+                <tr class="text-slate-500 border-b border-slate-200 font-semibold">
+                  <th class="pb-2">Datum</th>
+                  <th class="pb-2">Type</th>
+                  <th class="pb-2">Reden</th>
+                  <th class="pb-2">Beoordeling / Validiteit</th>
+                  <th class="pb-2">Tijdigheid</th>
+                  <th class="pb-2">Toelichting</th>
+                </tr>
+              </thead>
+              <tbody id="drawer-future-body" class="divide-y divide-slate-200/60">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Alvast doorgegeven (wacht op Socie-agenda) -->
+        <div id="drawer-voorbehoud-section" class="hidden">
+          <h4 class="text-xs font-extrabold uppercase tracking-wider text-orange-800 mb-2">Alvast doorgegeven (wacht op agenda)</h4>
+          <div class="overflow-x-auto bg-orange-50/60 rounded-lg border border-orange-200 p-2 sm:p-3">
+            <table class="w-full text-xs text-left min-w-[420px]">
+              <thead>
+                <tr class="text-orange-900 border-b border-orange-200 font-semibold">
+                  <th class="pb-2">Datum / Periode</th>
+                  <th class="pb-2">Reden</th>
+                  <th class="pb-2">Toelichting</th>
+                  <th class="pb-2">Ingediend op</th>
+                </tr>
+              </thead>
+              <tbody id="drawer-voorbehoud-body" class="divide-y divide-orange-200/60">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Ingetrokken afmeldingen -->
+        <div id="drawer-withdrawn-section" class="hidden">
+          <h4 class="text-xs font-extrabold uppercase tracking-wider text-slate-600 mb-2">Ingetrokken afmeldingen</h4>
+          <div class="overflow-x-auto bg-slate-50 rounded-lg border border-slate-200 p-2 sm:p-3">
+            <table class="w-full text-xs text-left min-w-[450px]">
+              <thead>
+                <tr class="text-slate-500 border-b border-slate-200 font-semibold">
+                  <th class="pb-2">Datum</th>
+                  <th class="pb-2">Activiteit</th>
+                  <th class="pb-2">Oorspr. reden</th>
+                  <th class="pb-2">Reden van intrekking</th>
+                  <th class="pb-2">Ingetrokken op</th>
+                </tr>
+              </thead>
+              <tbody id="drawer-withdrawn-body" class="divide-y divide-slate-200/60">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================== -->
+    <!-- PAGINA 3: BEOORDELINGSVOORRAAD (ALLEEN BESTUUR)-->
+    <!-- ============================================== -->
+    <div id="page-3" class="space-y-4 sm:space-y-5 hidden">
+      <div class="bg-white rounded-xl p-4 sm:p-5 shadow-sm border border-slate-200 border-t-4 border-t-[#1B2654] space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+          <div>
+            <div class="flex items-center space-x-2">
+              <h2 class="text-sm sm:text-base font-extrabold text-[#1B2654] uppercase tracking-wide">Beoordelingsvoorraad Bestuur</h2>
+              <span id="inbox-header-count" class="bg-[#E30613] text-white text-xs font-extrabold px-2.5 py-0.5 rounded-full">0 openstaand</span>
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5">
+              Nieuw binnengekomen afmeldingen krijgen eerst een automatische beoordeling. Zodra je hieronder een beoordeling kiest (of bevestigt), verdwijnt de melding uit deze voorraadbak.
+            </p>
+          </div>
+          <div class="flex items-center space-x-2 self-start sm:self-auto">
+            <select id="inbox-filter-mode" onchange="renderPage3()" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+              <option value="OPEN" selected>Nog te beoordelen (voorraad)</option>
+              <option value="BESPREEK">Alleen Bespreekbaar / Niet geldig / Priv&eacute;</option>
+              <option value="DONE">Reeds handmatig beoordeeld</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 border-l-4 border-l-[#28367B] px-3 py-2 rounded-lg">
+          Het systeem is zwart-wit, maar of een afmelding geoorloofd is of niet blijft maatwerk.
+        </div>
+
+        <div id="inbox-items-container" class="space-y-2.5 pt-1">
+          <!-- Dynamisch opgebouwd via JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- PAGINA 4: BEHEEROMGEVING (ALLEEN BESTUUR)     -->
+    <!-- ============================================== -->
+    <div id="page-4" class="space-y-4 sm:space-y-5 hidden">
+      <div class="bg-white rounded-xl p-4 sm:p-5 shadow-sm border border-slate-200 border-t-4 border-t-[#1B2654] space-y-4">
+        
+        <!-- Header & Subnavigatie -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div>
+            <h2 class="text-sm sm:text-base font-extrabold text-[#1B2654] uppercase tracking-wide">Bestuursbeheer</h2>
+            <p class="text-xs text-slate-500 mt-0.5">Beheer hier direct de ledenlijst, afmeldredenen en de aanwezigheidsnormen.</p>
+          </div>
+          
+          <div class="flex bg-slate-100 p-1 rounded-lg border border-slate-200 gap-1 self-start sm:self-auto">
+            <button id="beheer-tab-btn-leden" onclick="switchBeheerSubtab('leden')" class="px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition bg-[#1B2654] text-white shadow-sm">
+              Leden
+            </button>
+            <button id="beheer-tab-btn-redenen" onclick="switchBeheerSubtab('redenen')" class="px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition text-slate-600 hover:text-slate-900">
+              Redenen
+            </button>
+            <button id="beheer-tab-btn-norm" onclick="switchBeheerSubtab('norm')" class="px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition text-slate-600 hover:text-slate-900">
+              Norm &amp; Weging
+            </button>
+          </div>
+        </div>
+
+        <!-- Banner voor statusberichten in beheer -->
+        <div id="beheer-alert-banner" class="hidden rounded-lg p-3 text-xs font-semibold flex items-center justify-between gap-2">
+          <span id="beheer-alert-text"></span>
+          <button onclick="document.getElementById('beheer-alert-banner').classList.add('hidden')" class="font-bold text-sm leading-none">&times;</button>
+        </div>
+
+        <!-- SUBTAB 1: LEDENBEHEER -->
+        <div id="beheer-subtab-leden" class="space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div class="flex flex-wrap items-center gap-2 flex-1">
+              <input type="text" id="beheer-leden-search" onkeyup="renderBeheerLeden()" placeholder="Zoek op naam of ID..." class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B] w-full sm:w-48">
+              
+              <select id="beheer-leden-sectie" onchange="renderBeheerLeden()" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+                <option value="ALL">Alle secties</option>
+                <option value="Slagwerk">Slagwerk</option>
+                <option value="Trompet">Trompet</option>
+                <option value="Trombone">Trombone</option>
+                <option value="Sousafoon">Sousafoon</option>
+                <option value="Mellofoon">Mellofoon</option>
+                <option value="Bariton">Bariton</option>
+                <option value="Maitre">Maitre</option>
+                <option value="X">Niet spelend (X)</option>
+              </select>
+
+              <select id="beheer-leden-status" onchange="renderBeheerLeden()" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+                <option value="ALL">Alle statussen</option>
+                <option value="Actief">Actief</option>
+                <option value="Pauze">Pauze</option>
+                <option value="Niet spelend">Niet spelend</option>
+                <option value="Gestopt">Gestopt</option>
+              </select>
+            </div>
+
+            <button onclick="openBeheerMemberModal(null)" class="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider shadow-sm transition flex items-center justify-center space-x-1.5 flex-shrink-0">
+              <span>+ Nieuw lid toevoegen</span>
+            </button>
+          </div>
+
+          <!-- Leden Beheertabel -->
+          <div class="overflow-x-auto border border-slate-200 rounded-lg">
+            <table class="w-full text-left text-xs divide-y divide-slate-200">
+              <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] sm:text-[11px] tracking-wider">
+                <tr>
+                  <th class="py-2.5 px-3">ID</th>
+                  <th class="py-2.5 px-3">Naam</th>
+                  <th class="py-2.5 px-3">Sectie</th>
+                  <th class="py-2.5 px-3">Status</th>
+                  <th class="py-2.5 px-3">Rol</th>
+                  <th class="py-2.5 px-3">Pincode</th>
+                  <th class="py-2.5 px-3 text-right">Acties</th>
+                </tr>
+              </thead>
+              <tbody id="beheer-leden-table-body" class="divide-y divide-slate-100 bg-white">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- SUBTAB 2: CONFIG REDENEN BEHEER -->
+        <div id="beheer-subtab-redenen" class="space-y-4 hidden">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <p class="text-xs text-slate-600">
+              Beheer de keuzelijst met afmeldredenen en de bijbehorende automatische beoordeling.
+            </p>
+            <button onclick="addBeheerRedenRow()" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-[#1B2654] border border-slate-200 text-xs font-bold uppercase tracking-wider transition self-start sm:self-auto">
+              + Reden toevoegen
+            </button>
+          </div>
+
+          <div class="space-y-2" id="beheer-redenen-list">
+            <!-- Dynamisch opgebouwd -->
+          </div>
+
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-end">
+            <button id="save-redenen-btn" onclick="submitBeheerRedenenForm()" class="px-4 py-2 rounded-lg bg-[#E30613] hover:bg-red-700 text-white text-xs font-bold uppercase tracking-wider shadow-sm transition">
+              Redenen &amp; Validiteit Opslaan
+            </button>
+          </div>
+        </div>
+
+        <!-- SUBTAB 3: NORM & WEGING INSTELLINGEN -->
+        <div id="beheer-subtab-norm" class="space-y-4 hidden">
+          <p class="text-xs text-slate-600">
+            Pas hier de drempels voor tijdigheid, de aanwezigheidsnormen en de puntenweging aan. Wijzigingen werken direct door op alle dashboards.
+          </p>
+
+          <form id="beheer-norm-form" onsubmit="event.preventDefault(); submitBeheerNormForm();" class="space-y-4">
+            
+            <!-- Blok 1: Tijdigheid -->
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+              <h3 class="text-xs font-extrabold uppercase tracking-wider text-[#1B2654]">1. Tijdigheid (Dagen Vooraf)</h3>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Ruim op tijd (vanaf X dagen):</label>
+                  <input type="number" id="norm-in-ruim" min="2" max="365" required class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+                  <span class="text-[10px] text-slate-400 mt-0.5 block">Standaard: 40 dagen</span>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Op tijd (vanaf X dagen):</label>
+                  <input type="number" id="norm-in-optijd" min="2" max="365" required class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+                  <span class="text-[10px] text-slate-400 mt-0.5 block">Standaard: 20 dagen</span>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Laat (vanaf X dagen):</label>
+                  <input type="number" id="norm-in-laat" min="1" max="365" required class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+                  <span class="text-[10px] text-slate-400 mt-0.5 block">Standaard: 8 dagen (alles eronder = Zeer laat)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Blok 2: Aanwezigheidsnormen -->
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+              <h3 class="text-xs font-extrabold uppercase tracking-wider text-[#1B2654]">2. Aanwezigheidsdrempels</h3>
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Drempel Groen (%):</label>
+                  <input type="number" id="norm-in-groen" min="1" max="100" required class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+                  <span class="text-[10px] text-slate-400 mt-0.5 block">Vanaf dit % aanwezig = Groen</span>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Ondergrens Oranje / Rood (%):</label>
+                  <input type="number" id="norm-in-oranje" min="1" max="100" required class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+                  <span class="text-[10px] text-slate-400 mt-0.5 block">Onder dit % aanwezig = Rood</span>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Oranje bij niet-geldig:</label>
+                  <input type="number" id="norm-in-ng" min="1" max="20" required class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+                  <span class="text-[10px] text-slate-400 mt-0.5 block">Bij X of meer niet-geldig</span>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Rood bij optredens gemist:</label>
+                  <input type="number" id="norm-in-rood-opt" min="1" max="20" required class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+                  <span class="text-[10px] text-slate-400 mt-0.5 block">Bij X of meer gemist</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Blok 3: Puntenweging -->
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+              <h3 class="text-xs font-extrabold uppercase tracking-wider text-[#1B2654]">3. Puntenweging</h3>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Gewicht Repetitie (punten):</label>
+                  <input type="number" step="0.5" id="norm-in-w-rep" min="0.5" max="10" required class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+                  <span class="text-[10px] text-slate-400 mt-0.5 block">Standaard: 1 pt</span>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Gewicht Optreden (punten):</label>
+                  <input type="number" step="0.5" id="norm-in-w-opt" min="0.5" max="20" required class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+                  <span class="text-[10px] text-slate-400 mt-0.5 block">Standaard: 3 pt</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-2 flex items-center justify-end">
+              <button type="submit" id="save-norm-btn" class="px-4 py-2 rounded-lg bg-[#E30613] hover:bg-red-700 text-white text-xs font-bold uppercase tracking-wider shadow-sm transition">
+                Norm &amp; Weging Opslaan
+              </button>
+            </div>
+          </form>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- MODAL VOOR LID TOEVOEGEN / BEWERKEN -->
+  <div id="beheer-member-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl max-w-md w-full overflow-hidden shadow-xl border border-slate-200 flex flex-col">
+      <div class="bg-[#1B2654] px-4 sm:px-5 py-3.5 text-white border-b-[3px] border-[#E30613] flex items-center justify-between">
+        <h3 id="beheer-modal-title" class="text-sm sm:text-base font-extrabold uppercase tracking-wide">Lid Toevoegen</h3>
+        <button onclick="closeBeheerMemberModal()" class="text-slate-300 hover:text-white font-bold text-lg leading-none">&times;</button>
+      </div>
+
+      <form id="beheer-member-form" onsubmit="event.preventDefault(); submitBeheerMemberForm();" class="p-4 sm:p-5 space-y-3.5">
+        <input type="hidden" id="modal-lid-is-new" value="true">
+        <input type="hidden" id="modal-lid-id" value="">
+
+        <div>
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Naam <span class="text-[#E30613]">*</span></label>
+          <input type="text" id="modal-lid-naam" required maxlength="100" placeholder="Volledige voor- en achternaam" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Sectie <span class="text-[#E30613]">*</span></label>
+          <select id="modal-lid-sectie" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+            <option value="Slagwerk">Slagwerk</option>
+            <option value="Trompet">Trompet</option>
+            <option value="Mellofoon">Mellofoon</option>
+            <option value="Bariton">Bariton</option>
+            <option value="Trombone">Trombone</option>
+            <option value="Sousafoon">Sousafoon</option>
+            <option value="Maitre">Maitre</option>
+            <option value="X">X (Niet spelend)</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Status</label>
+            <select id="modal-lid-status" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+              <option value="Actief">Actief</option>
+              <option value="Pauze">Pauze</option>
+              <option value="Niet spelend">Niet spelend</option>
+              <option value="Gestopt">Gestopt</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Dashboard Rechten</label>
+            <select id="modal-lid-rol" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+              <option value="">Geen (regulier lid)</option>
+              <option value="Sectiehoofd">Sectiehoofd</option>
+              <option value="Bestuur">Bestuur</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="modal-history-note" class="hidden text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-200 leading-relaxed">
+          <strong>Automatische koppeling:</strong> Bij het wijzigen van de naam of sectie worden ook alle historische rijen van dit lid in <em>Data_input</em> direct bijgewerkt.
+        </div>
+
+        <div class="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
+          <button type="button" onclick="closeBeheerMemberModal()" class="px-3.5 py-2 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 transition">
+            Annuleren
+          </button>
+          <button type="submit" id="beheer-modal-save-btn" class="px-4 py-2 rounded-lg bg-[#E30613] hover:bg-red-700 text-white text-xs font-bold uppercase tracking-wider shadow-sm transition">
+            Opslaan
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-slate-200 py-3.5 px-4 text-center text-xs text-slate-500 mt-auto">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-1">
+      <div class="flex items-center space-x-2">
+        <span class="font-extrabold text-[#1B2654] uppercase tracking-wider">KTK Kampen</span>
+        <span>&bull;</span>
+        <span class="text-slate-400">Friendship. Music. Progress.</span>
+      </div>
+      <span id="last-updated-text" class="text-[11px] text-slate-400">Laatste update: zojuist</span>
+    </div>
+  </footer>
+
+  <script>
+    const STORAGE_KEY = 'ktk_socie_member_session_v1';
+    let AUTH_INIT = null;
+
+
+    let CURRENT_ADMIN = null; // { lidId, naam, sectie, rol, isBestuur, pin }
+    let SELECTED_DRAWER_MEMBER = null;
+    let DATA = null;
+    let BEHEER_SUBTAB = 'leden';
+    
+    let currentPage = 1;
+    let selectedDate = '';
+    
+    const systemNow = new Date();
+    let calCurrentYear = systemNow.getFullYear();
+    let calCurrentMonth = systemNow.getMonth();
+
+    const MONTH_NAMES = [
+      "Januari", "Februari", "Maart", "April", "Mei", "Juni",
+      "Juli", "Augustus", "September", "Oktober", "November", "December"
+    ];
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function escapeAttr(str) {
+      return escapeHtml(str).replace(/'/g, '&#39;');
+    }
+
+    function isCurrentUserBestuur() {
+      return Boolean((DATA && DATA.isBestuur) || (CURRENT_ADMIN && CURRENT_ADMIN.isBestuur));
+    }
+
+function initAuthFlow() {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(res) {
+            AUTH_INIT = res || { admins: [] };
+            populateAdminLoginDropdown();
+            tryAutoLoginDashboard();
+          })
+          .withFailureHandler(function(err) {
+            console.error("Fout bij laden van accounts:", err);
+            AUTH_INIT = { admins: [] };
+            populateAdminLoginDropdown();
+          })
+          .getDashboardAuthInit();
+      } else {
+        AUTH_INIT = { admins: [] };
+        populateAdminLoginDropdown();
+      }
+    }
+
+    function populateAdminLoginDropdown() {
+      const sel = document.getElementById('dash-login-select');
+      const admins = (AUTH_INIT && AUTH_INIT.admins) ? AUTH_INIT.admins.slice() : [];
+      admins.sort((a, b) => a.naam.localeCompare(b.naam, 'nl'));
+
+      if (admins.length === 0) {
+        sel.innerHTML = '<option value="">-- Geen accounts beschikbaar --</option>';
+        return;
+      }
+
+      let html = '<option value="">-- Kies je naam --</option>';
+      admins.forEach(a => {
+        const secClean = String(a.sectie || '').trim();
+        const hasRealSectie = secClean && secClean.toUpperCase() !== 'X' && secClean !== '-';
+        const subInfo = hasRealSectie ? (a.rol + ' - ' + secClean) : a.rol;
+        html += '<option value="' + escapeAttr(a.lidId) + '">' + escapeHtml(a.naam) + ' (' + escapeHtml(subInfo) + ')</option>';
+      });
+      sel.innerHTML = html;
+    }
+
+    function tryAutoLoginDashboard() {
+      try {
+        const savedRaw = localStorage.getItem(STORAGE_KEY);
+        if (!savedRaw) return;
+        const saved = JSON.parse(savedRaw);
+        if (!saved || !saved.lidId || !saved.pin) return;
+
+        const matchingAdmin = (AUTH_INIT && AUTH_INIT.admins)
+          ? AUTH_INIT.admins.find(a => a.lidId === saved.lidId)
+          : null;
+
+        if (!matchingAdmin) {
+          const banner = document.getElementById('dash-auth-unauthorized-banner');
+          banner.classList.remove('hidden');
+          return;
+        }
+
+        document.getElementById('dash-login-select').value = saved.lidId;
+        onSelectDashboardAdmin();
+        document.getElementById('dash-pin-input').value = saved.pin;
+        submitDashboardAuth(true);
+      } catch (e) {}
+    }
+
+    function onSelectDashboardAdmin() {
+      const lidId = document.getElementById('dash-login-select').value;
+      const pinBox = document.getElementById('dash-pin-box');
+      const errBox = document.getElementById('dash-auth-error');
+      errBox.classList.add('hidden');
+
+      if (!lidId) {
+        pinBox.classList.add('hidden');
+        return;
+      }
+
+      const admin = (AUTH_INIT && AUTH_INIT.admins) ? AUTH_INIT.admins.find(a => a.lidId === lidId) : null;
+      if (!admin) return;
+
+      pinBox.classList.remove('hidden');
+      const pinInput = document.getElementById('dash-pin-input');
+      pinInput.value = '';
+
+      const setupBanner = document.getElementById('dash-pin-setup-banner');
+      const pinLabel = document.getElementById('dash-pin-label');
+      const btnText = document.getElementById('dash-auth-btn-text');
+
+      if (admin.hasPin) {
+        setupBanner.classList.add('hidden');
+        pinLabel.textContent = '2. Voer je 4-cijferige pincode in:';
+        btnText.textContent = 'Dashboard Openen';
+      } else {
+        setupBanner.classList.remove('hidden');
+        pinLabel.textContent = '2. Kies een nieuwe 4-cijferige pincode:';
+        btnText.textContent = 'Pincode Opslaan & Openen';
+      }
+      setTimeout(() => pinInput.focus(), 50);
+    }
+
+    function submitDashboardAuth(isSilentAuto) {
+      const lidId = document.getElementById('dash-login-select').value;
+      const pin = String(document.getElementById('dash-pin-input').value || '').trim();
+      const errBox = document.getElementById('dash-auth-error');
+      const btn = document.getElementById('dash-auth-btn');
+      const btnText = document.getElementById('dash-auth-btn-text');
+      errBox.classList.add('hidden');
+
+      if (!lidId) return;
+      if (!/^\d{4}$/.test(pin)) {
+        if (!isSilentAuto) {
+          errBox.textContent = 'Voer een geldige pincode van exact 4 cijfers in.';
+          errBox.classList.remove('hidden');
+        }
+        return;
+      }
+
+      const admin = (AUTH_INIT && AUTH_INIT.admins) ? AUTH_INIT.admins.find(a => a.lidId === lidId) : null;
+      if (!admin) return;
+
+      btn.disabled = true;
+      btnText.textContent = 'Bezig met controleren...';
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        const runner = google.script.run
+          .withSuccessHandler(function(res) {
+            btn.disabled = false;
+            btnText.textContent = 'Dashboard Openen';
+            if (res && res.ok) {
+              admin.hasPin = true;
+              CURRENT_ADMIN = {
+                lidId: res.admin.lidId,
+                naam: res.admin.naam,
+                sectie: res.admin.sectie,
+                rol: res.admin.rol,
+                isBestuur: Boolean(res.admin.isBestuur),
+                pin: pin
+              };
+              try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({ lidId: CURRENT_ADMIN.lidId, pin: pin }));
+              } catch (e) {}
+              DATA = res.dashboardData;
+              showDashboardAfterAuth();
+            }
+          })
+          .withFailureHandler(function(err) {
+            btn.disabled = false;
+            btnText.textContent = admin.hasPin ? 'Dashboard Openen' : 'Pincode Opslaan & Openen';
+            errBox.textContent = (err && err.message) ? err.message : String(err);
+            errBox.classList.remove('hidden');
+          });
+
+        if (admin.hasPin) {
+          runner.loginDashboard(lidId, pin);
+        } else {
+          runner.setupDashboardPin(lidId, pin);
+        }
+      }
+    }
+
+    function showDashboardAfterAuth() {
+      document.getElementById('dashboard-auth-view').classList.add('hidden');
+      document.getElementById('header-controls').classList.remove('hidden');
+      const mobActions = document.getElementById('mobile-header-actions');
+      if (mobActions) mobActions.classList.remove('hidden');
+      if (CURRENT_ADMIN) {
+        document.getElementById('admin-user-name').textContent = CURRENT_ADMIN.naam;
+        document.getElementById('admin-user-role').textContent = CURRENT_ADMIN.rol || 'Bestuur';
+      }
+
+      const navBtn3 = document.getElementById('nav-btn-3');
+      const navBtn4 = document.getElementById('nav-btn-4');
+      const navGrid = document.getElementById('nav-tabs-grid');
+      const hintP2 = document.getElementById('bestuur-hint-p2');
+
+      if (isCurrentUserBestuur()) {
+        navBtn3.classList.remove('hidden');
+        navBtn4.classList.remove('hidden');
+        navGrid.className = 'grid grid-cols-2 sm:flex bg-black/25 p-1 rounded-lg border border-white/10 w-full sm:w-auto gap-0.5';
+        if (hintP2) hintP2.classList.remove('hidden');
+      } else {
+        navBtn3.classList.add('hidden');
+        navBtn4.classList.add('hidden');
+        navGrid.className = 'grid grid-cols-2 sm:flex bg-black/25 p-1 rounded-lg border border-white/10 w-full sm:w-auto gap-0.5';
+        if (hintP2) hintP2.classList.add('hidden');
+      }
+
+      document.getElementById('page-1').classList.remove('hidden');
+      init();
+    }
+
+    function logoutDashboard() {
+      CURRENT_ADMIN = null;
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (e) {}
+      document.getElementById('header-controls').classList.add('hidden');
+      const mobActions = document.getElementById('mobile-header-actions');
+      if (mobActions) mobActions.classList.add('hidden');
+      document.getElementById('page-1').classList.add('hidden');
+      document.getElementById('page-2').classList.add('hidden');
+      document.getElementById('page-3').classList.add('hidden');
+      document.getElementById('page-4').classList.add('hidden');
+      document.getElementById('dash-auth-unauthorized-banner').classList.add('hidden');
+      document.getElementById('dash-login-select').value = '';
+      document.getElementById('dash-pin-box').classList.add('hidden');
+      document.getElementById('dashboard-auth-view').classList.remove('hidden');
+    }
+
+    function init() {
+      if (!DATA || !DATA.afmeldingen) {
+        DATA = { leden: [], afmeldingen: [], voorbehoud: [], intrekkingen: [], agenda: [], configRedenen: [], lastUpdated: 'Zojuist' };
+      }
+      if (!DATA.voorbehoud) DATA.voorbehoud = [];
+      if (!DATA.intrekkingen) DATA.intrekkingen = [];
+      if (!DATA.agenda) DATA.agenda = [];
+      if (!DATA.configRedenen) DATA.configRedenen = [];
+
+      document.getElementById('last-updated-text').textContent = 'Laatste update: ' + (DATA.lastUpdated || 'zojuist');
+      
+      initSelectedDate();
+      updateInboxCounters();
+      renderCalendar();
+      renderPage1();
+      renderPage2();
+      if (isCurrentUserBestuur()) {
+        renderPage3();
+        renderPage4();
+      }
+    }
+
+    function updateInboxCounters() {
+      const openList = ((DATA && DATA.afmeldingen) || []).filter(a => !a.handmatigBeoordeeld);
+      const count = openList.length;
+
+      const navBadge = document.getElementById('inbox-nav-badge');
+      if (navBadge) {
+        navBadge.textContent = count;
+        navBadge.className = count > 0
+          ? 'bg-[#E30613] text-white text-[10px] font-extrabold px-1.5 py-0.2 rounded-full'
+          : 'bg-emerald-600 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full';
+      }
+
+      const calloutP1 = document.getElementById('bestuur-inbox-callout-p1');
+      const calloutCountP1 = document.getElementById('inbox-callout-count-p1');
+      if (calloutP1 && calloutCountP1) {
+        if (isCurrentUserBestuur() && count > 0) {
+          calloutCountP1.textContent = count;
+          calloutP1.classList.remove('hidden');
+        } else {
+          calloutP1.classList.add('hidden');
+        }
+      }
+    }
+
+    function getEventDoelgroep(ev) {
+      if (!ev) return 'all';
+      const tLow = String(ev.titel || '').trim().toLowerCase();
+      const fb = String(ev.doelgroep || 'all').trim().toLowerCase();
+      const hasSlagwerk = tLow.indexOf('drumline') !== -1 || tLow.indexOf('slagwerk') !== -1 || tLow.indexOf('percussie') !== -1 || tLow.indexOf('drums') !== -1;
+      const hasBrass = tLow.indexOf('brass') !== -1 || tLow.indexOf('blazers') !== -1;
+      if (hasSlagwerk && hasBrass) return 'all';
+      if (hasSlagwerk && !hasBrass) return 'slagwerk';
+      if (hasBrass && !hasSlagwerk) return 'brass';
+      if (fb === 'slagwerk' || fb === 'brass') return fb;
+      return 'all';
+    }
+
+    function getAgendaEventsForDate(dateStr) {
+      if (!DATA || !DATA.agenda || !dateStr) return [];
+      return DATA.agenda.filter(e => e.datum === dateStr);
+    }
+
+    function isSectieExpectedOnDate(dateStr, sectie) {
+      const evs = getAgendaEventsForDate(dateStr);
+      if (evs.length === 0) return true;
+      return evs.some(ev => doesActivityMatchSectie(getEventDoelgroep(ev), sectie));
+    }
+
+    function getVoorbehoudForDate(dateStr, activeRecordsForDate) {
+      if (!DATA || !DATA.voorbehoud || !dateStr) return [];
+      const activeNames = {};
+      (activeRecordsForDate || []).forEach(r => {
+        if (r.lidId) activeNames['id:' + r.lidId] = true;
+        if (r.naam) activeNames['n:' + r.naam.toLowerCase()] = true;
+      });
+
+      const seenMembers = {};
+      const result = [];
+      DATA.voorbehoud.forEach(v => {
+        if (v.excludedDates && Array.isArray(v.excludedDates) && v.excludedDates.indexOf(dateStr) !== -1) {
+          return;
+        }
+        const matches = v.isPeriod
+          ? (dateStr >= v.periodStart && dateStr <= v.periodEnd)
+          : (v.datum === dateStr);
+        if (!matches) return;
+        if (!isSectieExpectedOnDate(dateStr, v.sectie)) return;
+
+        if ((v.lidId && activeNames['id:' + v.lidId]) || (v.naam && activeNames['n:' + v.naam.toLowerCase()])) {
+          return;
+        }
+        const key = (v.lidId || v.naam || '').toLowerCase();
+        if (seenMembers[key]) return;
+        seenMembers[key] = true;
+        result.push(v);
+      });
+      return result;
+    }
+
+    function getWithdrawnForDate(dateStr) {
+      if (!DATA || !DATA.intrekkingen || !dateStr) return [];
+      return DATA.intrekkingen.filter(w => w.datum === dateStr && isSectieExpectedOnDate(dateStr, w.sectie));
+    }
+
+    function initSelectedDate() {
+      const now = new Date();
+      calCurrentYear = now.getFullYear();
+      calCurrentMonth = now.getMonth();
+
+      const todayStr = calCurrentYear + '-' + 
+        String(calCurrentMonth + 1).padStart(2, '0') + '-' + 
+        String(now.getDate()).padStart(2, '0');
+
+      const dates = getAvailableDates();
+
+      if (dates.includes(todayStr)) {
+        selectedDate = todayStr;
+        return;
+      }
+
+      const currentMonthPrefix = calCurrentYear + '-' + String(calCurrentMonth + 1).padStart(2, '0');
+      const thisMonthDates = dates.filter(d => d.startsWith(currentMonthPrefix));
+
+      if (thisMonthDates.length > 0) {
+        const upcomingThisMonth = thisMonthDates.filter(d => d >= todayStr);
+        selectedDate = upcomingThisMonth.length > 0 ? upcomingThisMonth[0] : thisMonthDates[0];
+      } else {
+        selectedDate = todayStr;
+      }
+    }
+
+    function jumpToCurrentMonth() {
+      const now = new Date();
+      calCurrentYear = now.getFullYear();
+      calCurrentMonth = now.getMonth();
+      initSelectedDate();
+      renderCalendar();
+      renderPage1();
+    }
+
+    function getAvailableDates() {
+      const counts = {};
+      if (DATA && DATA.afmeldingen) {
+        DATA.afmeldingen.forEach(a => {
+          if (a.datum) counts[a.datum] = (counts[a.datum] || 0) + 1;
+        });
+      }
+      if (DATA && DATA.agenda) {
+        DATA.agenda.forEach(ev => {
+          if (ev.datum) counts[ev.datum] = (counts[ev.datum] || 0) + 1;
+        });
+      }
+      return Object.keys(counts).sort();
+    }
+
+    function switchPage(p) {
+      if ((p === 3 || p === 4) && !isCurrentUserBestuur()) return;
+      currentPage = p;
+      const p1 = document.getElementById('page-1');
+      const p2 = document.getElementById('page-2');
+      const p3 = document.getElementById('page-3');
+      const p4 = document.getElementById('page-4');
+      const btn1 = document.getElementById('nav-btn-1');
+      const btn2 = document.getElementById('nav-btn-2');
+      const btn3 = document.getElementById('nav-btn-3');
+      const btn4 = document.getElementById('nav-btn-4');
+
+      const isBestuur = isCurrentUserBestuur();
+
+      const activeCls = 'px-2.5 sm:px-3.5 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition flex items-center justify-center space-x-1.5 bg-[#E30613] text-white shadow-sm';
+      const inactiveCls = 'px-2.5 sm:px-3.5 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition flex items-center justify-center space-x-1.5 text-slate-300 hover:text-white';
+
+      p1.classList.add('hidden');
+      p2.classList.add('hidden');
+      p3.classList.add('hidden');
+      p4.classList.add('hidden');
+
+      btn1.className = (p === 1 ? activeCls : inactiveCls);
+      btn2.className = (p === 2 ? activeCls : inactiveCls);
+      if (btn3) {
+        btn3.className = (p === 3 ? activeCls : inactiveCls) + (isBestuur ? '' : ' hidden');
+      }
+      if (btn4) {
+        btn4.className = (p === 4 ? activeCls : inactiveCls) + (isBestuur ? '' : ' hidden');
+      }
+
+      if (p === 1) {
+        p1.classList.remove('hidden');
+        renderPage1();
+      } else if (p === 2) {
+        p2.classList.remove('hidden');
+        renderPage2();
+      } else if (p === 3) {
+        p3.classList.remove('hidden');
+        renderPage3();
+      } else if (p === 4) {
+        p4.classList.remove('hidden');
+        renderPage4();
+      }
+    }
+
+    function refreshData() {
+      if (!CURRENT_ADMIN) return;
+      const icon = document.getElementById('refresh-icon');
+      const iconMob = document.getElementById('refresh-icon-mob');
+      if (icon) icon.classList.add('animate-spin');
+      if (iconMob) iconMob.classList.add('animate-spin');
+      
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(freshData) {
+            if (icon) icon.classList.remove('animate-spin');
+            if (iconMob) iconMob.classList.remove('animate-spin');
+            if (freshData) {
+              DATA = freshData;
+              if (!DATA.voorbehoud) DATA.voorbehoud = [];
+              if (!DATA.intrekkingen) DATA.intrekkingen = [];
+              if (!DATA.agenda) DATA.agenda = [];
+              if (!DATA.configRedenen) DATA.configRedenen = [];
+              document.getElementById('last-updated-text').textContent = 'Laatste update: ' + (DATA.lastUpdated || 'zojuist');
+              updateInboxCounters();
+              renderCalendar();
+              if (currentPage === 1) renderPage1();
+              else if (currentPage === 2) renderPage2();
+              else if (currentPage === 3) renderPage3();
+              else if (currentPage === 4) renderPage4();
+            }
+          })
+          .withFailureHandler(function(err) {
+            if (icon) icon.classList.remove('animate-spin');
+            if (iconMob) iconMob.classList.remove('animate-spin');
+            console.error('Fout bij verversen:', err);
+          })
+          .getDashboardData(CURRENT_ADMIN.lidId, CURRENT_ADMIN.pin);
+      }
+    }
+
+    // ==========================================
+    // HANDMATIGE BEOORDELING DOOR BESTUUR
+    // ==========================================
+    let IS_SAVING_JUDGMENT = false;
+
+    function showJudgmentSavingBanner(show) {
+      let el = document.getElementById('judgment-saving-indicator');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'judgment-saving-indicator';
+        el.className = 'fixed bottom-5 right-5 sm:bottom-6 sm:right-6 bg-[#1B2654] text-white px-4 py-3 rounded-xl shadow-2xl border-2 border-[#E30613] z-50 flex items-center space-x-3 transition-all duration-200 pointer-events-none';
+        el.innerHTML = `
+          <div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
+          <div>
+            <div class="text-xs font-extrabold uppercase tracking-wide">Bezig met opslaan...</div>
+            <div class="text-[11px] text-slate-300">Even geduld vóór de volgende beoordeling</div>
+          </div>
+        `;
+        document.body.appendChild(el);
+      }
+      if (show) {
+        el.classList.remove('hidden');
+      } else {
+        el.classList.add('hidden');
+      }
+    }
+
+    function finishJudgmentAction() {
+      IS_SAVING_JUDGMENT = false;
+      showJudgmentSavingBanner(false);
+      document.querySelectorAll('.judgment-btn').forEach(b => {
+        b.disabled = false;
+        b.classList.remove('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+      });
+    }
+
+    function applyManualJudgment(rowNumber, submissionId, newStatus, btnElement) {
+      if (!isCurrentUserBestuur() || !CURRENT_ADMIN) return;
+      if (IS_SAVING_JUDGMENT) return; // Voorkomt dat dubbelklikken tegelijk worden doorgestuurd
+
+      IS_SAVING_JUDGMENT = true;
+      showJudgmentSavingBanner(true);
+
+      // Schakel direct alle beoordelingsknoppen visueel en technisch uit
+      document.querySelectorAll('.judgment-btn').forEach(b => {
+        b.disabled = true;
+        b.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+      });
+
+      // Optimistische update in lokale DATA zodat UI direct meegaat
+      if (DATA && DATA.afmeldingen) {
+        const target = DATA.afmeldingen.find(a =>
+          (submissionId && a.submissionId === submissionId) ||
+          (rowNumber && Number(a.rowNumber) === Number(rowNumber))
+        );
+        if (target) {
+          if (newStatus === '') {
+            target.handmatigBeoordeeld = false;
+            target.handmatigStatus = '';
+            target.beoordeeldDoor = '';
+            target.validiteit = target.autoValiditeit || target.validiteit;
+          } else {
+            target.handmatigBeoordeeld = true;
+            target.handmatigStatus = newStatus;
+            target.beoordeeldDoor = CURRENT_ADMIN.naam;
+            if (newStatus === 'Geldig' || newStatus === 'Bespreekbaar' || newStatus === 'Niet acceptabel') {
+              target.validiteit = newStatus;
+            }
+          }
+        }
+      }
+
+      updateInboxCounters();
+      if (currentPage === 1) renderPage1();
+      else if (currentPage === 2) {
+        renderPage2();
+        if (SELECTED_DRAWER_MEMBER && !document.getElementById('member-drawer').classList.contains('hidden')) {
+          reopenCurrentDrawerMember();
+        }
+      } else if (currentPage === 3) {
+        renderPage3();
+      }
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(res) {
+            finishJudgmentAction();
+            if (res && res.dashboardData) {
+              DATA = res.dashboardData;
+              updateInboxCounters();
+              if (currentPage === 1) renderPage1();
+              else if (currentPage === 2) {
+                renderPage2();
+                if (SELECTED_DRAWER_MEMBER && !document.getElementById('member-drawer').classList.contains('hidden')) {
+                  reopenCurrentDrawerMember();
+                }
+              } else if (currentPage === 3) {
+                renderPage3();
+              }
+            }
+          })
+          .withFailureHandler(function(err) {
+            finishJudgmentAction();
+            alert('Kon beoordeling niet opslaan: ' + ((err && err.message) ? err.message : String(err)));
+            refreshData();
+          })
+          .setManualAbsenceJudgment({
+            adminLidId: CURRENT_ADMIN.lidId,
+            adminPin: CURRENT_ADMIN.pin,
+            rowNumber: rowNumber,
+            submissionId: submissionId,
+            status: newStatus
+          });
+      } else {
+        setTimeout(function() {
+          finishJudgmentAction();
+          if (currentPage === 3) renderPage3();
+        }, 500);
+      }
+    }
+
+    function renderBestuurActionButtonsHtml(r, compactMode) {
+      if (!isCurrentUserBestuur()) return '';
+      const rNum = Number(r.rowNumber) || 0;
+      const subId = escapeAttr(r.submissionId || '');
+      const curVal = (r.validiteit || '').toLowerCase();
+      const isManual = Boolean(r.handmatigBeoordeeld);
+
+      const btnBase = (compactMode
+        ? 'px-2 py-0.5 rounded text-[10px] font-bold border transition judgment-btn '
+        : 'px-2.5 py-1 rounded-md text-[11px] font-bold border transition judgment-btn ') +
+        (IS_SAVING_JUDGMENT ? 'opacity-40 cursor-not-allowed pointer-events-none ' : '');
+
+      const disabledAttr = IS_SAVING_JUDGMENT ? 'disabled' : '';
+
+      const isGeldigActive = isManual && !curVal.includes('niet') && !curVal.includes('bespreek');
+      const isBespreekActive = isManual && curVal.includes('bespreek');
+      const isNietActive = isManual && curVal.includes('niet');
+
+      return `
+        <div class="flex flex-wrap items-center gap-1 pt-1" onclick="event.stopPropagation();">
+          <button type="button" ${disabledAttr} onclick="applyManualJudgment(${rNum}, '${subId}', 'Geldig', this)"
+            class="${btnBase} ${isGeldigActive ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-white hover:bg-emerald-50 text-emerald-800 border-emerald-300'}">
+            Geldig
+          </button>
+          <button type="button" ${disabledAttr} onclick="applyManualJudgment(${rNum}, '${subId}', 'Bespreekbaar', this)"
+            class="${btnBase} ${isBespreekActive ? 'bg-orange-500 text-white border-orange-600' : 'bg-white hover:bg-orange-50 text-orange-800 border-orange-300'}">
+            Bespreekbaar
+          </button>
+          <button type="button" ${disabledAttr} onclick="applyManualJudgment(${rNum}, '${subId}', 'Niet acceptabel', this)"
+            class="${btnBase} ${isNietActive ? 'bg-[#E30613] text-white border-red-700' : 'bg-white hover:bg-red-50 text-[#E30613] border-red-300'}">
+            Niet geldig
+          </button>
+          ${isManual ? `
+            <button type="button" ${disabledAttr} onclick="applyManualJudgment(${rNum}, '${subId}', '', this)" title="Terugzetten naar automatische systeembeoordeling"
+              class="px-1.5 py-0.5 rounded text-[10px] font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-200 transition judgment-btn ${IS_SAVING_JUDGMENT ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}">
+              Reset
+            </button>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    function renderToelichtingHtml(r) {
+      if (!r.toelichting) return '';
+      if (r.priveToelichting && !isCurrentUserBestuur()) {
+        return `
+          <div class="text-[11px] text-slate-500 bg-slate-100 px-2.5 py-1.5 rounded-md border border-slate-200 flex items-center space-x-1.5">
+            <svg class="w-3.5 h-3.5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+            <span class="italic">Priv&eacute;toelichting (alleen zichtbaar voor bestuur)</span>
+          </div>
+        `;
+      }
+      if (r.priveToelichting && isCurrentUserBestuur()) {
+        return `
+          <div class="text-xs text-slate-700 bg-blue-50/60 px-2.5 py-1.5 rounded-md border border-blue-200 break-words">
+            <span class="inline-block text-[10px] font-bold uppercase tracking-wider bg-[#1B2654] text-white px-1.5 py-0.2 rounded mr-1.5">Priv&eacute; voor bestuur</span>
+            <span class="italic">"${escapeHtml(r.toelichting)}"</span>
+          </div>
+        `;
+      }
+      return `
+        <div class="text-xs text-slate-600 bg-slate-50 px-2.5 py-1.5 rounded-md border border-slate-100 italic break-words">
+          "${escapeHtml(r.toelichting)}"
+        </div>
+      `;
+    }
+
+    // ==========================================
+    // PAGINA 3: VOORRAADBAK BESTUUR RENDERAAR
+    // ==========================================
+    function renderPage3() {
+      if (!isCurrentUserBestuur()) return;
+
+      const allAbs = ((DATA && DATA.afmeldingen) || []).slice();
+      const openList = allAbs.filter(a => !a.handmatigBeoordeeld);
+      const headerBadge = document.getElementById('inbox-header-count');
+      if (headerBadge) {
+        headerBadge.textContent = openList.length + ' openstaand';
+        headerBadge.className = openList.length > 0
+          ? 'bg-[#E30613] text-white text-xs font-extrabold px-2.5 py-0.5 rounded-full'
+          : 'bg-emerald-600 text-white text-xs font-extrabold px-2.5 py-0.5 rounded-full';
+      }
+
+      const mode = document.getElementById('inbox-filter-mode').value;
+      let filtered = [];
+      if (mode === 'OPEN') {
+        filtered = openList;
+      } else if (mode === 'BESPREEK') {
+        filtered = openList.filter(a => {
+          const v = (a.validiteit || '').toLowerCase();
+          return v.includes('bespreek') || v.includes('niet') || Boolean(a.priveToelichting);
+        });
+      } else {
+        filtered = allAbs.filter(a => Boolean(a.handmatigBeoordeeld));
+      }
+
+      filtered.sort((a, b) => {
+        if (mode !== 'DONE') {
+          const scoreA = ((a.validiteit || '').toLowerCase().includes('bespreek') ? 2 : (a.validiteit || '').toLowerCase().includes('niet') ? 2 : 0) + (a.priveToelichting ? 1 : 0);
+          const scoreB = ((b.validiteit || '').toLowerCase().includes('bespreek') ? 2 : (b.validiteit || '').toLowerCase().includes('niet') ? 2 : 0) + (b.priveToelichting ? 1 : 0);
+          if (scoreB !== scoreA) return scoreB - scoreA;
+        }
+        return (a.datum || '').localeCompare(b.datum || '');
+      });
+
+      const container = document.getElementById('inbox-items-container');
+      container.innerHTML = '';
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center space-y-1.5">
+            <div class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto font-bold text-lg">&#10003;</div>
+            <h4 class="text-sm font-bold text-slate-800">${mode === 'DONE' ? 'Nog geen handmatig beoordeelde afmeldingen' : 'De beoordelingsvoorraad is helemaal leeg!'}</h4>
+            <p class="text-xs text-slate-500">Alle binnengekomen afmeldingen in deze weergave zijn door het bestuur beoordeeld.</p>
+          </div>
+        `;
+        return;
+      }
+
+      filtered.forEach(r => {
+        const isOpt = (r.type || '').toLowerCase().includes('optreden');
+        let valClass = 'badge-geldig';
+        if ((r.validiteit || '').toLowerCase().includes('niet')) valClass = 'badge-niet';
+        else if ((r.validiteit || '').toLowerCase().includes('bespreek')) valClass = 'badge-bespreek';
+
+        let tijdClass = 'badge-optijd';
+        if ((r.tijdigheid || '').toLowerCase() === 'zeer laat') tijdClass = 'badge-zeerlaat';
+        else if ((r.tijdigheid || '').toLowerCase() === 'laat') tijdClass = 'badge-laat';
+
+        const evs = getAgendaEventsForDate(r.datum);
+        const evTitle = evs.length > 0 ? evs.map(e => e.titel).join(' \u2022 ') : r.type;
+
+        const card = document.createElement('div');
+        card.className = 'bg-slate-50/70 rounded-xl p-3.5 sm:p-4 border border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3';
+        card.innerHTML = `
+          <div class="space-y-1.5 min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span class="font-extrabold text-sm text-[#1B2654]">${escapeHtml(r.naam)}</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-[#BCE3F9]/60 text-[#1B2654]">${escapeHtml(r.sectie)}</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${isOpt ? 'bg-[#E30613] text-white' : 'bg-slate-200 text-slate-700'}">${escapeHtml(r.type)}</span>
+              <span class="text-xs font-bold text-slate-700">${escapeHtml(formatDutchDateShort(r.datum))}</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${tijdClass}">${escapeHtml(r.tijdigheid)} (${Number(r.dagenVooraf) || 0}d vooraf)</span>
+            </div>
+            <div class="text-xs text-slate-600 flex flex-wrap items-center gap-1.5">
+              <span><strong>Activiteit:</strong> ${escapeHtml(evTitle)}</span>
+              <span>&bull;</span>
+              <span><strong>Reden:</strong> ${escapeHtml(r.reden || '-')}</span>
+              <span>&bull;</span>
+              <span><strong>Systeemadvies:</strong> <span class="px-1.5 py-0.2 rounded text-[10px] font-bold ${valClass}">${escapeHtml(r.autoValiditeit || r.validiteit)}</span></span>
+              ${r.handmatigBeoordeeld ? `<span class="px-2 py-0.2 rounded text-[10px] font-bold bg-[#1B2654] text-white">Handmatig: ${escapeHtml(r.validiteit)} (${escapeHtml(r.beoordeeldDoor || 'Bestuur')})</span>` : ''}
+            </div>
+            ${renderToelichtingHtml(r)}
+          </div>
+
+          <div class="flex flex-col sm:flex-row lg:flex-col items-start sm:items-center lg:items-end justify-between gap-2 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-200/80 flex-shrink-0">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Kies beoordeling (verdwijnt uit voorraad):</span>
+            ${renderBestuurActionButtonsHtml(r, false)}
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    // ==========================================
+    // PAGINA 4: BEHEEROMGEVING (ALLEEN BESTUUR)
+    // ==========================================
+    function switchBeheerSubtab(tab) {
+      BEHEER_SUBTAB = tab;
+      const btnLeden = document.getElementById('beheer-tab-btn-leden');
+      const btnRedenen = document.getElementById('beheer-tab-btn-redenen');
+      const btnNorm = document.getElementById('beheer-tab-btn-norm');
+      const boxLeden = document.getElementById('beheer-subtab-leden');
+      const boxRedenen = document.getElementById('beheer-subtab-redenen');
+      const boxNorm = document.getElementById('beheer-subtab-norm');
+
+      const actCls = 'px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition bg-[#1B2654] text-white shadow-sm';
+      const inactCls = 'px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition text-slate-600 hover:text-slate-900';
+
+      boxLeden.classList.add('hidden');
+      boxRedenen.classList.add('hidden');
+      boxNorm.classList.add('hidden');
+      btnLeden.className = inactCls;
+      btnRedenen.className = inactCls;
+      btnNorm.className = inactCls;
+
+      if (tab === 'leden') {
+        boxLeden.classList.remove('hidden');
+        btnLeden.className = actCls;
+        renderBeheerLeden();
+      } else if (tab === 'redenen') {
+        boxRedenen.classList.remove('hidden');
+        btnRedenen.className = actCls;
+        renderBeheerRedenen();
+      } else if (tab === 'norm') {
+        boxNorm.classList.remove('hidden');
+        btnNorm.className = actCls;
+        renderBeheerNorm();
+      }
+    }
+
+    function renderPage4() {
+      if (!isCurrentUserBestuur()) return;
+      switchBeheerSubtab(BEHEER_SUBTAB);
+    }
+
+    function showBeheerAlert(msg, isSuccess) {
+      const banner = document.getElementById('beheer-alert-banner');
+      const text = document.getElementById('beheer-alert-text');
+      banner.className = isSuccess
+        ? 'rounded-lg p-3 text-xs font-semibold flex items-center justify-between gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200'
+        : 'rounded-lg p-3 text-xs font-semibold flex items-center justify-between gap-2 bg-red-50 text-red-800 border border-red-200';
+      text.textContent = msg;
+      banner.classList.remove('hidden');
+    }
+
+    // --- Subtab 1: Ledenbeheer ---
+    function renderBeheerLeden() {
+      const search = (document.getElementById('beheer-leden-search').value || '').toLowerCase().trim();
+      const secFilter = document.getElementById('beheer-leden-sectie').value;
+      const statusFilter = document.getElementById('beheer-leden-status').value;
+
+      let list = ((DATA && DATA.leden) || []).slice();
+      list.sort((a, b) => a.naam.localeCompare(b.naam, 'nl'));
+
+      if (secFilter !== 'ALL') {
+        list = list.filter(l => l.sectie === secFilter);
+      }
+      if (statusFilter !== 'ALL') {
+        list = list.filter(l => (l.status || 'Actief').toLowerCase() === statusFilter.toLowerCase());
+      }
+      if (search) {
+        list = list.filter(l => l.naam.toLowerCase().includes(search) || l.lidId.toLowerCase().includes(search));
+      }
+
+      const tbody = document.getElementById('beheer-leden-table-body');
+      tbody.innerHTML = '';
+
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-400">Geen leden gevonden.</td></tr>';
+        return;
+      }
+
+      list.forEach(l => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition';
+
+        const st = (l.status || 'Actief').toLowerCase();
+        let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">Actief</span>';
+        if (st === 'gestopt') {
+          statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700">Gestopt</span>';
+        } else if (st === 'pauze') {
+          statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-50 text-orange-800 border border-orange-200">Pauze</span>';
+        } else if (st === 'niet spelend') {
+          statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">Niet spelend</span>';
+        }
+
+        const rolRaw = (l.sectiehoofd || '').trim().toLowerCase();
+        let rolBadge = '<span class="text-slate-400 text-[11px]">-</span>';
+        if (rolRaw.includes('bestuur')) {
+          rolBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#1B2654] text-white">Bestuur</span>';
+        } else if (rolRaw.includes('sectiehoofd') || rolRaw === 'ja' || rolRaw === '1') {
+          rolBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#BCE3F9] text-[#1B2654]">Sectiehoofd</span>';
+        }
+
+        const pinCell = l.hasPin
+          ? `<span class="inline-flex items-center text-emerald-700 text-[11px] font-semibold"><span class="w-2 h-2 rounded-full bg-emerald-500 mr-1.5"></span>Ingesteld</span>
+             <button onclick="resetMemberPinFromBeheer('${escapeAttr(l.lidId)}', '${escapeAttr(l.naam)}')" class="ml-2 text-[10px] font-bold text-orange-800 hover:underline">Reset</button>`
+          : `<span class="text-slate-400 text-[11px] italic">Geen pincode</span>`;
+
+        tr.innerHTML = `
+          <td class="py-2.5 px-3 font-mono font-bold text-slate-700 text-xs">${escapeHtml(l.lidId)}</td>
+          <td class="py-2.5 px-3 font-bold text-slate-900">${escapeHtml(l.naam)}</td>
+          <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-[#BCE3F9]/60 text-[#1B2654]">${escapeHtml(l.sectie)}</span></td>
+          <td class="py-2.5 px-3">${statusBadge}</td>
+          <td class="py-2.5 px-3">${rolBadge}</td>
+          <td class="py-2.5 px-3">${pinCell}</td>
+          <td class="py-2.5 px-3 text-right space-x-1.5">
+            <button onclick="openBeheerMemberModal('${escapeAttr(l.lidId)}')" class="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-[#1B2654] font-bold text-[11px] transition">Bewerken</button>
+            <button onclick="deleteMemberPrompt('${escapeAttr(l.lidId)}', '${escapeAttr(l.naam)}')" class="px-2 py-1 rounded hover:bg-red-50 text-[#E30613] font-bold text-[11px] transition">Verwijderen</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function openBeheerMemberModal(lidId) {
+      const isNew = !lidId;
+      document.getElementById('modal-lid-is-new').value = isNew ? 'true' : 'false';
+      document.getElementById('modal-lid-id').value = lidId || '';
+      document.getElementById('beheer-modal-title').textContent = isNew ? 'Nieuw lid toevoegen' : 'Lid bewerken';
+
+      const historyNote = document.getElementById('modal-history-note');
+      if (isNew) {
+        document.getElementById('modal-lid-naam').value = '';
+        document.getElementById('modal-lid-sectie').value = 'Slagwerk';
+        document.getElementById('modal-lid-status').value = 'Actief';
+        document.getElementById('modal-lid-rol').value = '';
+        historyNote.classList.add('hidden');
+      } else {
+        const member = (DATA && DATA.leden) ? DATA.leden.find(l => l.lidId === lidId) : null;
+        if (!member) return;
+        document.getElementById('modal-lid-naam').value = member.naam;
+        document.getElementById('modal-lid-sectie').value = member.sectie || 'Slagwerk';
+        document.getElementById('modal-lid-status').value = member.status || 'Actief';
+
+        const rLow = (member.sectiehoofd || '').toLowerCase();
+        let rolSelectVal = '';
+        if (rLow.includes('bestuur')) rolSelectVal = 'Bestuur';
+        else if (rLow.includes('sectiehoofd') || rLow === 'ja' || rLow === '1') rolSelectVal = 'Sectiehoofd';
+        document.getElementById('modal-lid-rol').value = rolSelectVal;
+        historyNote.classList.remove('hidden');
+      }
+
+      document.getElementById('beheer-member-modal').classList.remove('hidden');
+    }
+
+    function closeBeheerMemberModal() {
+      document.getElementById('beheer-member-modal').classList.add('hidden');
+    }
+
+    function submitBeheerMemberForm() {
+      if (!isCurrentUserBestuur() || !CURRENT_ADMIN) return;
+      const isNew = document.getElementById('modal-lid-is-new').value === 'true';
+      const lidId = document.getElementById('modal-lid-id').value;
+      const naam = (document.getElementById('modal-lid-naam').value || '').trim();
+      const sectie = document.getElementById('modal-lid-sectie').value;
+      const status = document.getElementById('modal-lid-status').value;
+      const sectiehoofd = document.getElementById('modal-lid-rol').value;
+
+      if (!naam) {
+        alert('Vul een geldige naam in.');
+        return;
+      }
+
+      const saveBtn = document.getElementById('beheer-modal-save-btn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Bezig...';
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(res) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Opslaan';
+            closeBeheerMemberModal();
+            if (res && res.dashboardData) {
+              DATA = res.dashboardData;
+              if (res.admins) {
+                AUTH_INIT.admins = res.admins;
+                populateAdminLoginDropdown();
+              }
+              if (res.admin && CURRENT_ADMIN.lidId === res.admin.lidId) {
+                CURRENT_ADMIN.naam = res.admin.naam;
+                CURRENT_ADMIN.sectie = res.admin.sectie;
+                document.getElementById('admin-user-name').textContent = CURRENT_ADMIN.naam;
+              }
+              showBeheerAlert(isNew ? 'Nieuw lid ' + res.lidId + ' succesvol toegevoegd!' : 'Gegevens van ' + naam + ' bijgewerkt.', true);
+              renderCalendar();
+              renderPage1();
+              renderPage2();
+              renderPage4();
+            }
+          })
+          .withFailureHandler(function(err) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Opslaan';
+            alert('Fout bij opslaan lid: ' + ((err && err.message) ? err.message : String(err)));
+          })
+          .saveMemberByAdmin({
+            adminLidId: CURRENT_ADMIN.lidId,
+            adminPin: CURRENT_ADMIN.pin,
+            isNew: isNew,
+            lidId: lidId,
+            naam: naam,
+            sectie: sectie,
+            status: status,
+            sectiehoofd: sectiehoofd
+          });
+      }
+    }
+
+    function deleteMemberPrompt(lidId, naam) {
+      if (!isCurrentUserBestuur() || !CURRENT_ADMIN) return;
+      if (lidId === CURRENT_ADMIN.lidId) {
+        alert('Je kunt je eigen ingelogde account niet verwijderen.');
+        return;
+      }
+
+      const ok = confirm('Weet je zeker dat je lid "' + naam + '" (' + lidId + ') definitief wilt verwijderen?\n\nTip: Als het lid gestopt is, kun je de status ook op "Gestopt" zetten om historie te bewaren.');
+      if (!ok) return;
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(res) {
+            if (res && res.dashboardData) {
+              DATA = res.dashboardData;
+              if (res.admins) {
+                AUTH_INIT.admins = res.admins;
+                populateAdminLoginDropdown();
+              }
+              showBeheerAlert('Lid ' + naam + ' is verwijderd.', true);
+              renderCalendar();
+              renderPage1();
+              renderPage2();
+              renderPage4();
+            }
+          })
+          .withFailureHandler(function(err) {
+            alert('Fout bij verwijderen: ' + ((err && err.message) ? err.message : String(err)));
+          })
+          .deleteMemberByAdmin({
+            adminLidId: CURRENT_ADMIN.lidId,
+            adminPin: CURRENT_ADMIN.pin,
+            targetLidId: lidId
+          });
+      }
+    }
+
+    function resetMemberPinFromBeheer(lidId, naam) {
+      if (!isCurrentUserBestuur() || !CURRENT_ADMIN) return;
+      const ok = confirm('Pincode van ' + naam + ' wissen?\nHet lid kan daarna direct een nieuwe pincode instellen.');
+      if (!ok) return;
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function() {
+            const m = (DATA && DATA.leden) ? DATA.leden.find(l => l.lidId === lidId) : null;
+            if (m) m.hasPin = false;
+            showBeheerAlert('Pincode van ' + naam + ' is gereset.', true);
+            renderBeheerLeden();
+          })
+          .withFailureHandler(function(err) {
+            alert('Fout bij resetten pincode: ' + ((err && err.message) ? err.message : String(err)));
+          })
+          .resetMemberPinByAdmin(CURRENT_ADMIN.lidId, CURRENT_ADMIN.pin, lidId);
+      }
+    }
+
+    // --- Subtab 2: Afmeldredenen Beheer ---
+    function renderBeheerRedenen() {
+      const container = document.getElementById('beheer-redenen-list');
+      container.innerHTML = '';
+      const list = (DATA && DATA.configRedenen) ? DATA.configRedenen : [];
+
+      list.forEach((item, idx) => {
+        const row = document.createElement('div');
+        row.className = 'beheer-reden-row flex items-center gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200';
+        row.innerHTML = `
+          <input type="text" value="${escapeAttr(item.reden)}" data-old-reden="${escapeAttr(item.reden)}" class="beheer-reden-input flex-1 bg-white border border-slate-300 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]" placeholder="Naam van de afmeldreden">
+          <select class="beheer-validiteit-select bg-white border border-slate-300 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+            <option value="Geldig" ${item.validiteit === 'Geldig' ? 'selected' : ''}>Geldig</option>
+            <option value="Bespreekbaar" ${item.validiteit === 'Bespreekbaar' ? 'selected' : ''}>Bespreekbaar</option>
+            <option value="Niet acceptabel" ${item.validiteit === 'Niet acceptabel' ? 'selected' : ''}>Niet acceptabel</option>
+          </select>
+          <button type="button" onclick="removeBeheerRedenRow(this)" class="p-1.5 text-slate-400 hover:text-[#E30613] font-bold text-base leading-none" title="Reden verwijderen">&times;</button>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function addBeheerRedenRow() {
+      const container = document.getElementById('beheer-redenen-list');
+      const row = document.createElement('div');
+      row.className = 'beheer-reden-row flex items-center gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200';
+      row.innerHTML = `
+        <input type="text" value="" data-old-reden="" class="beheer-reden-input flex-1 bg-white border border-slate-300 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]" placeholder="Nieuwe afmeldreden...">
+        <select class="beheer-validiteit-select bg-white border border-slate-300 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+          <option value="Geldig">Geldig</option>
+          <option value="Bespreekbaar" selected>Bespreekbaar</option>
+          <option value="Niet acceptabel">Niet acceptabel</option>
+        </select>
+        <button type="button" onclick="removeBeheerRedenRow(this)" class="p-1.5 text-slate-400 hover:text-[#E30613] font-bold text-base leading-none" title="Reden verwijderen">&times;</button>
+      `;
+      container.appendChild(row);
+      row.querySelector('input').focus();
+    }
+
+    function removeBeheerRedenRow(btn) {
+      const rows = document.querySelectorAll('.beheer-reden-row');
+      if (rows.length <= 1) {
+        alert('Er moet minimaal één afmeldreden ingesteld blijven.');
+        return;
+      }
+      btn.closest('.beheer-reden-row').remove();
+    }
+
+    function submitBeheerRedenenForm() {
+      if (!isCurrentUserBestuur() || !CURRENT_ADMIN) return;
+
+      const rows = document.querySelectorAll('.beheer-reden-row');
+      const reasons = [];
+      const seen = {};
+
+      for (let i = 0; i < rows.length; i++) {
+        const inp = rows[i].querySelector('.beheer-reden-input');
+        const sel = rows[i].querySelector('.beheer-validiteit-select');
+        const rVal = (inp.value || '').trim();
+        const vVal = sel.value;
+        const oldR = inp.getAttribute('data-old-reden') || '';
+
+        if (!rVal) {
+          alert('Vul alle velden in of verwijder de lege rij.');
+          inp.focus();
+          return;
+        }
+        if (seen[rVal.toLowerCase()]) {
+          alert('De reden "' + rVal + '" staat er dubbel in.');
+          inp.focus();
+          return;
+        }
+        seen[rVal.toLowerCase()] = true;
+
+        reasons.push({
+          reden: rVal,
+          validiteit: vVal,
+          oldReden: oldR
+        });
+      }
+
+      const saveBtn = document.getElementById('save-redenen-btn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Bezig met opslaan...';
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(res) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Redenen & Validiteit Opslaan';
+            if (res && res.dashboardData) {
+              DATA = res.dashboardData;
+              showBeheerAlert('Afmeldredenen en validiteit zijn succesvol opgeslagen!', true);
+              renderPage1();
+              renderPage2();
+              renderBeheerRedenen();
+            }
+          })
+          .withFailureHandler(function(err) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Redenen & Validiteit Opslaan';
+            alert('Fout bij opslaan redenen: ' + ((err && err.message) ? err.message : String(err)));
+          })
+          .saveConfigReasonsByAdmin({
+            adminLidId: CURRENT_ADMIN.lidId,
+            adminPin: CURRENT_ADMIN.pin,
+            reasons: reasons
+          });
+      }
+    }
+
+    // --- Subtab 3: Norm & Weging Beheer ---
+    function renderBeheerNorm() {
+      const norm = getActiveNormSettings();
+      document.getElementById('norm-in-ruim').value = norm.ruimOpTijdDagen;
+      document.getElementById('norm-in-optijd').value = norm.opTijdDagen;
+      document.getElementById('norm-in-laat').value = norm.laatDagen;
+      document.getElementById('norm-in-groen').value = norm.drempelGroenPct;
+      document.getElementById('norm-in-oranje').value = norm.drempelOranjePct;
+      document.getElementById('norm-in-ng').value = norm.drempelOranjeNietGeldig;
+      document.getElementById('norm-in-rood-opt').value = norm.drempelRoodOptredens;
+      document.getElementById('norm-in-w-rep').value = norm.gewichtRepetitie;
+      document.getElementById('norm-in-w-opt').value = norm.gewichtOptreden;
+    }
+
+    function submitBeheerNormForm() {
+      if (!isCurrentUserBestuur() || !CURRENT_ADMIN) return;
+
+      const norm = {
+        ruimOpTijdDagen: Number(document.getElementById('norm-in-ruim').value),
+        opTijdDagen: Number(document.getElementById('norm-in-optijd').value),
+        laatDagen: Number(document.getElementById('norm-in-laat').value),
+        drempelGroenPct: Number(document.getElementById('norm-in-groen').value),
+        drempelOranjePct: Number(document.getElementById('norm-in-oranje').value),
+        drempelOranjeNietGeldig: Number(document.getElementById('norm-in-ng').value),
+        drempelRoodOptredens: Number(document.getElementById('norm-in-rood-opt').value),
+        gewichtRepetitie: Number(document.getElementById('norm-in-w-rep').value),
+        gewichtOptreden: Number(document.getElementById('norm-in-w-opt').value)
+      };
+
+      if (norm.ruimOpTijdDagen <= norm.opTijdDagen || norm.opTijdDagen <= norm.laatDagen || norm.laatDagen < 1) {
+        alert('Tijdigheid fout: Ruim op tijd moet groter zijn dan Op tijd, en Op tijd groter dan Laat.');
+        return;
+      }
+      if (norm.drempelGroenPct <= norm.drempelOranjePct || norm.drempelGroenPct > 100 || norm.drempelOranjePct < 1) {
+        alert('Drempel Groen moet hoger zijn dan Ondergrens Oranje (en tussen 1% en 100% liggen).');
+        return;
+      }
+      if (norm.gewichtRepetitie <= 0 || norm.gewichtOptreden <= 0) {
+        alert('Puntenwegingen moeten groter dan 0 zijn.');
+        return;
+      }
+
+      const saveBtn = document.getElementById('save-norm-btn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Bezig met opslaan...';
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(res) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Norm & Weging Opslaan';
+            if (res && res.dashboardData) {
+              DATA = res.dashboardData;
+              showBeheerAlert('Norminstellingen en wegingsfactoren succesvol opgeslagen!', true);
+              renderPage1();
+              renderPage2();
+              renderBeheerNorm();
+            }
+          })
+          .withFailureHandler(function(err) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Norm & Weging Opslaan';
+            alert('Fout bij opslaan normen: ' + ((err && err.message) ? err.message : String(err)));
+          })
+          .saveNormSettingsByAdmin({
+            adminLidId: CURRENT_ADMIN.lidId,
+            adminPin: CURRENT_ADMIN.pin,
+            norm: norm
+          });
+      }
+    }
+
+    // ==========================================
+    // KALENDER SELECTIE COMPONENT
+    // ==========================================
+    function changeMonth(delta) {
+      calCurrentMonth += delta;
+      if (calCurrentMonth > 11) {
+        calCurrentMonth = 0;
+        calCurrentYear++;
+      } else if (calCurrentMonth < 0) {
+        calCurrentMonth = 11;
+        calCurrentYear--;
+      }
+      renderCalendar();
+    }
+
+    function renderCalendar() {
+      document.getElementById('calendar-month-year').textContent = MONTH_NAMES[calCurrentMonth] + ' ' + calCurrentYear;
+      
+      const dayRecordsMap = {};
+      const dayTypeMap = {};
+      if (DATA && DATA.afmeldingen) {
+        DATA.afmeldingen.forEach(a => {
+          if (!a.datum) return;
+          if (!isSectieExpectedOnDate(a.datum, a.sectie)) return;
+          const [y, m, d] = a.datum.split('-').map(Number);
+          if (y === calCurrentYear && m === (calCurrentMonth + 1)) {
+            if (!dayRecordsMap[d]) dayRecordsMap[d] = [];
+            dayRecordsMap[d].push(a);
+            if (a.type && a.type.toLowerCase().includes('optreden')) {
+              dayTypeMap[d] = 'Optreden';
+            } else if (!dayTypeMap[d]) {
+              dayTypeMap[d] = 'Repetitie';
+            }
+          }
+        });
+      }
+
+      const dayAgendaMap = {};
+      if (DATA && DATA.agenda) {
+        DATA.agenda.forEach(ev => {
+          if (!ev.datum) return;
+          const [y, m, d] = ev.datum.split('-').map(Number);
+          if (y === calCurrentYear && m === (calCurrentMonth + 1)) {
+            if (!dayAgendaMap[d]) dayAgendaMap[d] = [];
+            dayAgendaMap[d].push(ev);
+            if (ev.type === 'Optreden') {
+              dayTypeMap[d] = 'Optreden';
+            } else if (!dayTypeMap[d]) {
+              dayTypeMap[d] = 'Repetitie';
+            }
+          }
+        });
+      }
+
+      const firstDayOfMonth = new Date(calCurrentYear, calCurrentMonth, 1).getDay();
+      const startDayIndex = (firstDayOfMonth === 0) ? 6 : (firstDayOfMonth - 1);
+      const totalDaysInMonth = new Date(calCurrentYear, calCurrentMonth + 1, 0).getDate();
+
+      const grid = document.getElementById('calendar-days-grid');
+      grid.innerHTML = '';
+
+      for (let i = 0; i < startDayIndex; i++) {
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'h-10 sm:h-12 rounded-lg bg-slate-50/60';
+        grid.appendChild(emptyCell);
+      }
+
+      for (let day = 1; day <= totalDaysInMonth; day++) {
+        const dateStr = calCurrentYear + '-' + String(calCurrentMonth + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+        const activeRecs = dayRecordsMap[day] || [];
+        const count = activeRecs.length;
+        const hasAbsences = count > 0;
+        const agendaEvs = dayAgendaMap[day] || [];
+        const hasAgenda = agendaEvs.length > 0;
+        const voorbehoudRecs = getVoorbehoudForDate(dateStr, activeRecs);
+        const voorbehoudCount = voorbehoudRecs.length;
+        const isOptreden = dayTypeMap[day] === 'Optreden';
+        const isSelected = dateStr === selectedDate;
+
+        const dayBtn = document.createElement('button');
+        dayBtn.onclick = () => selectDate(dateStr);
+        if (hasAgenda) {
+          dayBtn.title = agendaEvs.map(e => e.titel).join(' | ');
+        } else if (voorbehoudCount > 0) {
+          dayBtn.title = voorbehoudCount + 'x alvast doorgegeven (wacht op agenda)';
+        }
+
+        let cellClasses = 'h-10 sm:h-12 p-1 rounded-lg text-xs font-bold transition flex flex-col items-center justify-between relative border ';
+        
+        if (isSelected) {
+          cellClasses += 'bg-[#1B2654] text-white border-[#1B2654] shadow-sm ring-2 ring-[#28367B]/40';
+        } else if (hasAbsences) {
+          if (isOptreden) {
+            cellClasses += 'bg-red-50 text-red-900 border-red-200 hover:bg-red-100';
+          } else {
+            cellClasses += 'bg-blue-50/70 text-[#1B2654] border-blue-200 hover:bg-blue-100';
+          }
+        } else if (voorbehoudCount > 0) {
+          cellClasses += 'bg-orange-50/80 text-orange-950 border-orange-300 hover:bg-orange-100';
+        } else if (hasAgenda) {
+          cellClasses += isOptreden
+            ? 'bg-red-50/30 text-slate-800 border-red-200 hover:bg-red-50'
+            : 'bg-emerald-50/40 text-slate-800 border-emerald-200 hover:bg-emerald-50';
+        } else {
+          cellClasses += 'bg-white text-slate-700 border-slate-200/80 hover:bg-slate-50';
+        }
+
+        dayBtn.className = cellClasses;
+
+        let badgeHtml = '';
+        if (hasAbsences) {
+          const pillBg = (isSelected || isOptreden) ? 'bg-[#E30613]' : 'bg-[#28367B]';
+          badgeHtml = '<span class="text-[9px] font-extrabold ' + pillBg + ' text-white px-1.5 py-0.2 rounded-full leading-tight">' + count + '</span>';
+        } else if (voorbehoudCount > 0) {
+          badgeHtml = '<span class="text-[9px] font-bold bg-orange-500 text-white px-1.5 py-0.2 rounded-full leading-tight">' + voorbehoudCount + '</span>';
+        } else if (hasAgenda) {
+          badgeHtml = '<span class="w-1.5 h-1.5 rounded-full ' + (isOptreden ? 'bg-[#E30613]' : 'bg-emerald-500') + ' mb-0.5"></span>';
+        }
+
+        dayBtn.innerHTML = `
+          <span class="text-[11px] sm:text-xs leading-none ${isSelected ? 'text-white' : ''}">${day}</span>
+          ${badgeHtml}
+        `;
+
+        grid.appendChild(dayBtn);
+      }
+    }
+
+    function selectDate(dateStr) {
+      selectedDate = dateStr;
+      const [y, m] = dateStr.split('-').map(Number);
+      calCurrentYear = y;
+      calCurrentMonth = m - 1;
+      renderCalendar();
+      renderPage1();
+    }
+
+    function formatDutchDateShort(dateStr) {
+      if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr || '-';
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const monthsShort = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+      return d + ' ' + monthsShort[m - 1] + ' ' + y;
+    }
+
+    // ==========================================
+    // PAGINA 1: SECTIE WEERGAVE
+    // ==========================================
+    function renderPage1() {
+      const agendaEvents = getAgendaEventsForDate(selectedDate);
+      const allKnownSections = ['Slagwerk', 'Trompet', 'Trombone', 'Sousafoon', 'Mellofoon', 'Bariton', 'Maitre'];
+      const expectedSections = allKnownSections.filter(sec => isSectieExpectedOnDate(selectedDate, sec));
+      const records = (DATA && DATA.afmeldingen)
+        ? DATA.afmeldingen.filter(a => a.datum === selectedDate && isSectieExpectedOnDate(selectedDate, a.sectie))
+        : [];
+      const voorbehoudList = getVoorbehoudForDate(selectedDate, records);
+      const withdrawnList = getWithdrawnForDate(selectedDate);
+      const hasScheduledEvent = agendaEvents.length > 0 || records.length > 0;
+
+      let eventType = 'Geen agendapunt';
+      if (agendaEvents.some(e => e.type === 'Optreden') || records.some(r => (r.type || '').toLowerCase().includes('optreden'))) {
+        eventType = 'Optreden';
+      } else if (hasScheduledEvent) {
+        eventType = 'Repetitie';
+      }
+
+      const badge = document.getElementById('event-type-badge');
+      badge.textContent = eventType;
+      if (eventType === 'Optreden') {
+        badge.className = 'px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider bg-[#E30613] text-white';
+      } else if (eventType === 'Repetitie') {
+        badge.className = 'px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider bg-[#28367B] border border-white/20 text-white';
+      } else {
+        badge.className = 'px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-white/10 text-slate-300';
+      }
+
+      if (selectedDate) {
+        const [y, m, d] = selectedDate.split('-').map(Number);
+        const dateObj = new Date(y, m - 1, d);
+        const dayNames = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
+        const dayName = dayNames[dateObj.getDay()];
+        const monthName = MONTH_NAMES[m - 1];
+
+        document.getElementById('selected-date-display').textContent = dayName + ' ' + d + ' ' + monthName + ' ' + y;
+        if (agendaEvents.length > 0) {
+          document.getElementById('selected-day-subtext').textContent = agendaEvents.map(e => e.titel).join(' \u2022 ');
+        } else if (records.length > 0) {
+          document.getElementById('selected-day-subtext').textContent = eventType + ' op deze datum';
+        } else if (voorbehoudList.length > 0) {
+          document.getElementById('selected-day-subtext').textContent = 'Nog geen agendapunt \u2022 Wel ' + voorbehoudList.length + 'x alvast doorgegeven';
+        } else {
+          document.getElementById('selected-day-subtext').textContent = 'Geen repetitie of optreden in de agenda';
+        }
+      } else {
+        document.getElementById('selected-date-display').textContent = 'Geen datum gekozen';
+        document.getElementById('selected-day-subtext').textContent = '-';
+      }
+
+      const total = records.length;
+      document.getElementById('kpi-total-display').textContent = total;
+      const subLabel = document.getElementById('kpi-total-sublabel');
+      if (subLabel) {
+        subLabel.textContent = (total === 0 && voorbehoudList.length > 0)
+          ? ('leden afwezig (' + voorbehoudList.length + ' voorbehoud)')
+          : 'leden afwezig';
+      }
+
+      const playingMembers = getPlayingMembersList();
+      const eligibleMembers = playingMembers.filter(m => isSectieExpectedOnDate(selectedDate, m.sectie));
+      const totalEligible = eligibleMembers.length || playingMembers.length || 52;
+      const expectedPresent = Math.max(0, totalEligible - total);
+      const expectedPct = totalEligible > 0 ? Math.round((expectedPresent / totalEligible) * 100) : 100;
+      const presentDispEl = document.getElementById('kpi-present-display');
+      const presentPctEl = document.getElementById('kpi-present-pct');
+      if (presentDispEl && presentPctEl) {
+        if (hasScheduledEvent) {
+          presentDispEl.textContent = expectedPresent + ' / ' + totalEligible;
+          presentPctEl.textContent = expectedPct + '% aanwezig' + (voorbehoudList.length > 0 ? (' (' + voorbehoudList.length + ' voorbehoud)') : '');
+        } else {
+          presentDispEl.textContent = totalEligible + ' leden';
+          presentPctEl.textContent = 'Geen activiteit gepland';
+        }
+      }
+
+      const sectionMemberCounts = {};
+      playingMembers.forEach(m => {
+        const s = m.sectie || 'Overig';
+        sectionMemberCounts[s] = (sectionMemberCounts[s] || 0) + 1;
+      });
+
+      const sectionGroups = {};
+      records.forEach(r => {
+        const sec = r.sectie || 'Overig';
+        if (!sectionGroups[sec]) sectionGroups[sec] = [];
+        sectionGroups[sec].push(r);
+      });
+
+      const activeSections = Object.keys(sectionGroups);
+      document.getElementById('sections-active-count').textContent = activeSections.length + (activeSections.length === 1 ? ' sectie met afmeldingen' : ' secties met afmeldingen');
+
+      const container = document.getElementById('section-bins-container');
+      container.innerHTML = '';
+
+      const noAbsencesBanner = document.getElementById('no-absences-banner');
+      const presentBanner = document.getElementById('present-sections-banner');
+
+      if (total === 0) {
+        if (!hasScheduledEvent && voorbehoudList.length > 0) {
+          noAbsencesBanner.classList.add('hidden');
+          presentBanner.classList.add('hidden');
+        } else {
+          noAbsencesBanner.classList.remove('hidden');
+          const iconEl = document.getElementById('no-absences-icon');
+          const titleEl = document.getElementById('no-absences-title');
+          const descEl = document.getElementById('no-absences-desc');
+          if (hasScheduledEvent) {
+            noAbsencesBanner.className = 'bg-white border border-emerald-200 rounded-xl p-6 sm:p-8 text-center shadow-sm';
+            if (iconEl) {
+              iconEl.className = 'w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-2.5 font-bold text-lg';
+              iconEl.innerHTML = '&#10003;';
+            }
+            if (titleEl) {
+              titleEl.className = 'text-sm sm:text-base font-bold text-emerald-900';
+              titleEl.textContent = 'Geen afmeldingen voor deze datum';
+            }
+            if (descEl) {
+              const targetLabel = (expectedSections.length > 0 && expectedSections.length < allKnownSections.length)
+                ? ('Alle verwachte leden (' + expectedSections.join(', ') + ')')
+                : 'Alle korpsleden';
+              descEl.textContent = agendaEvents.length > 0
+                ? (targetLabel + ' zijn aanwezig bij: ' + agendaEvents.map(e => e.titel).join(' \u2022 '))
+                : (targetLabel + ' zijn aanwezig op deze repetitie/optreden.');
+            }
+            presentBanner.classList.remove('hidden');
+          } else {
+            noAbsencesBanner.className = 'bg-white border border-slate-200 rounded-xl p-6 sm:p-7 text-center shadow-sm';
+            if (iconEl) {
+              iconEl.className = 'w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto mb-2.5 font-bold text-base';
+              iconEl.innerHTML = '&ndash;';
+            }
+            if (titleEl) {
+              titleEl.className = 'text-sm sm:text-base font-bold text-slate-700';
+              titleEl.textContent = 'Geen KTK-activiteit gepland op deze datum';
+            }
+            if (descEl) {
+              descEl.textContent = 'Er staat op deze dag nog geen repetitie of optreden in de agenda.';
+            }
+            presentBanner.classList.add('hidden');
+          }
+        }
+      } else {
+        noAbsencesBanner.classList.add('hidden');
+        presentBanner.classList.remove('hidden');
+
+        const priorityOrder = ['Slagwerk', 'Trompet', 'Trombone', 'Sousafoon', 'Mellofoon', 'Bariton', 'Maitre'];
+        const sortedSections = activeSections.sort((a, b) => {
+          const idxA = priorityOrder.indexOf(a);
+          const idxB = priorityOrder.indexOf(b);
+          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+          if (idxA !== -1) return -1;
+          if (idxB !== -1) return 1;
+          return a.localeCompare(b);
+        });
+
+        sortedSections.forEach(secName => {
+          const secRecords = sectionGroups[secName];
+          const secTotalMembers = sectionMemberCounts[secName] || secRecords.length;
+          const secPresentMembers = Math.max(0, secTotalMembers - secRecords.length);
+          const binCard = document.createElement('div');
+          binCard.className = 'bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm flex flex-col';
+
+          const header = document.createElement('div');
+          header.className = 'bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between border-l-4 border-l-[#1B2654]';
+          header.innerHTML = `
+            <div>
+              <h4 class="font-extrabold text-[#1B2654] text-xs sm:text-sm uppercase tracking-wide leading-tight">${escapeHtml(secName)}</h4>
+              <span class="text-[10px] font-semibold text-emerald-700">${secPresentMembers}/${secTotalMembers} aanwezig</span>
+            </div>
+            <span class="bg-[#1B2654] text-white font-bold text-[11px] px-2.5 py-0.5 rounded-md">
+              ${secRecords.length} afgemeld
+            </span>
+          `;
+          binCard.appendChild(header);
+
+          const listBody = document.createElement('div');
+          listBody.className = 'p-3.5 space-y-2.5 flex-1 bg-white divide-y divide-slate-100';
+
+          secRecords.forEach(r => {
+            let valClass = 'badge-geldig';
+            if ((r.validiteit || '').toLowerCase().includes('niet')) valClass = 'badge-niet';
+            else if ((r.validiteit || '').toLowerCase().includes('bespreek')) valClass = 'badge-bespreek';
+
+            let tijdClass = 'badge-optijd';
+            if ((r.tijdigheid || '').toLowerCase() === 'zeer laat') tijdClass = 'badge-zeerlaat';
+            else if ((r.tijdigheid || '').toLowerCase() === 'laat') tijdClass = 'badge-laat';
+
+            const manualBadge = r.handmatigBeoordeeld
+              ? `<span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#1B2654] text-white" title="Handmatig beoordeeld door ${escapeAttr(r.beoordeeldDoor || 'Bestuur')}">Beoordeeld door bestuur</span>`
+              : '';
+
+            const memberItem = document.createElement('div');
+            memberItem.className = 'pt-2.5 first:pt-0 space-y-1.5';
+            memberItem.innerHTML = `
+              <div class="flex items-start justify-between gap-2">
+                <span class="font-bold text-slate-900 text-xs sm:text-sm">${escapeHtml(r.naam)}</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-semibold flex-shrink-0 ${tijdClass}">${escapeHtml(r.tijdigheid || 'Op tijd')}</span>
+              </div>
+              <div class="flex flex-wrap items-center gap-1.5 text-xs">
+                <span class="text-slate-600 font-medium">${escapeHtml(r.reden || '-')}</span>
+                <span class="px-1.5 py-0.2 rounded text-[10px] font-semibold ${valClass}">${escapeHtml(r.validiteit || 'Geldig')}</span>
+                ${manualBadge}
+              </div>
+              ${renderToelichtingHtml(r)}
+              ${renderBestuurActionButtonsHtml(r, true)}
+            `;
+            listBody.appendChild(memberItem);
+          });
+
+          binCard.appendChild(listBody);
+          container.appendChild(binCard);
+        });
+      }
+
+      const presentSections = expectedSections.filter(s => !activeSections.includes(s)).map(s => {
+        const cnt = sectionMemberCounts[s] || 0;
+        return cnt > 0 ? (s + ' (' + cnt + '/' + cnt + ')') : s;
+      });
+      const presentListSpan = document.getElementById('present-sections-list');
+      if (presentSections.length > 0) {
+        presentListSpan.textContent = presentSections.join(', ');
+      } else {
+        presentListSpan.textContent = expectedSections.length === 1
+          ? ('Geen (' + expectedSections[0] + ' heeft minimaal 1 afmelding)')
+          : 'Geen (alle verwachte secties hebben minimaal 1 afmelding)';
+      }
+
+      const voorbehoudSection = document.getElementById('voorbehoud-date-section');
+      const voorbehoudListEl = document.getElementById('voorbehoud-date-list');
+      const voorbehoudCountEl = document.getElementById('voorbehoud-date-count');
+      if (voorbehoudList.length > 0) {
+        voorbehoudSection.classList.remove('hidden');
+        voorbehoudCountEl.textContent = voorbehoudList.length + (voorbehoudList.length === 1 ? ' lid' : ' leden');
+        voorbehoudListEl.innerHTML = '';
+        voorbehoudList.forEach(v => {
+          const card = document.createElement('div');
+          card.className = 'bg-white rounded-lg p-3 border border-orange-200 space-y-1.5';
+          const rangeText = v.isPeriod
+            ? (formatDutchDateShort(v.periodStart) + ' t/m ' + formatDutchDateShort(v.periodEnd))
+            : formatDutchDateShort(v.datum);
+          card.innerHTML = `
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <div class="font-bold text-slate-900 text-xs sm:text-sm">${escapeHtml(v.naam)}</div>
+                <span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold bg-[#BCE3F9]/60 text-[#1B2654]">${escapeHtml(v.sectie)}</span>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-orange-100 text-orange-900 border border-orange-300">${escapeHtml(rangeText)}</span>
+            </div>
+            <div class="text-xs text-slate-700 font-medium pt-0.5">Reden: <span class="font-semibold">${escapeHtml(v.reden || '-')}</span></div>
+            ${renderToelichtingHtml(v)}
+          `;
+          voorbehoudListEl.appendChild(card);
+        });
+      } else {
+        voorbehoudSection.classList.add('hidden');
+      }
+
+      const withdrawnSection = document.getElementById('withdrawn-date-section');
+      const withdrawnListEl = document.getElementById('withdrawn-date-list');
+      const withdrawnCountEl = document.getElementById('withdrawn-date-count');
+      if (withdrawnList.length > 0) {
+        withdrawnSection.classList.remove('hidden');
+        withdrawnCountEl.textContent = withdrawnList.length + ' ingetrokken';
+        withdrawnListEl.innerHTML = '';
+        withdrawnList.forEach(w => {
+          const item = document.createElement('div');
+          item.className = 'bg-slate-50 rounded-lg p-3 border border-slate-200 flex flex-col justify-between space-y-1.5';
+          item.innerHTML = `
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <div class="flex items-center space-x-2">
+                <span class="font-bold text-slate-800 text-xs sm:text-sm">${escapeHtml(w.naam)}</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-[#BCE3F9]/60 text-[#1B2654]">${escapeHtml(w.sectie)}</span>
+              </div>
+              <span class="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">Ingetrokken (${escapeHtml(w.ingediend || '-')})</span>
+            </div>
+            <div class="text-xs text-slate-600 break-words">
+              <span class="font-semibold text-slate-700">Reden intrekking:</span>
+              <span class="italic text-slate-800">"${escapeHtml(w.redenIntrekking || '-')}"</span>
+              <span class="text-[11px] text-slate-400 ml-1">(oorspr.: ${escapeHtml(w.reden || '-')})</span>
+            </div>
+          `;
+          withdrawnListEl.appendChild(item);
+        });
+      } else {
+        withdrawnSection.classList.add('hidden');
+      }
+    }
+
+    // ==========================================
+    // HULPFUNCTIES VOOR SPELENDE LEDEN & AANKOMENDE OPTREDENS
+    // ==========================================
+    function getPlayingMembersList() {
+      if (!DATA || !DATA.leden) return [];
+      return DATA.leden.filter(m => {
+        const st = String(m.status || '').trim().toLowerCase();
+        const sc = String(m.sectie || '').trim().toUpperCase();
+        return st !== 'gestopt' && st !== 'niet spelend' && sc !== 'X';
+      });
+    }
+
+    function jumpToOptredenDate(datumStr) {
+      if (!datumStr) return;
+      const [y, m] = datumStr.split('-').map(Number);
+      calCurrentYear = y;
+      calCurrentMonth = m - 1;
+      switchPage(1);
+      selectDate(datumStr);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function renderUpcomingOptredensOverview(containerId, countBadgeId, sectieFilter) {
+      const container = document.getElementById(containerId);
+      const countBadge = document.getElementById(countBadgeId);
+      if (!container) return;
+
+      const now = new Date();
+      const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+
+      const upcomingMap = {};
+      if (DATA && DATA.agenda) {
+        DATA.agenda.forEach(ev => {
+          if (ev.datum >= todayStr && ev.type === 'Optreden') {
+            if (!upcomingMap[ev.datum]) {
+              upcomingMap[ev.datum] = {
+                datum: ev.datum,
+                titel: ev.titel || 'KTK | Optreden'
+              };
+            }
+          }
+        });
+      }
+      if (DATA && DATA.afmeldingen) {
+        DATA.afmeldingen.forEach(a => {
+          const isOpt = (a.type || '').toLowerCase().indexOf('optreden') !== -1;
+          if (a.datum >= todayStr && isOpt && !upcomingMap[a.datum]) {
+            upcomingMap[a.datum] = {
+              datum: a.datum,
+              titel: 'Optreden (' + a.datum + ')'
+            };
+          }
+        });
+      }
+
+      const upcomingList = Object.keys(upcomingMap).sort().map(k => upcomingMap[k]);
+      if (countBadge) {
+        countBadge.textContent = upcomingList.length + (upcomingList.length === 1 ? ' optreden' : ' optredens');
+      }
+
+      container.innerHTML = '';
+      if (upcomingList.length === 0) {
+        container.innerHTML = '<div class="col-span-full py-4 text-center text-xs text-slate-400 bg-slate-50 rounded-lg border border-slate-100">Er staan momenteel geen toekomstige optredens in de agenda.</div>';
+        return;
+      }
+
+      const allPlaying = getPlayingMembersList();
+      const filteredPlaying = (sectieFilter && sectieFilter !== 'ALL')
+        ? allPlaying.filter(m => m.sectie === sectieFilter)
+        : allPlaying;
+
+      const sectionOrder = ['Slagwerk', 'Trompet', 'Mellofoon', 'Bariton', 'Trombone', 'Sousafoon', 'Maitre'];
+      const sectionTotals = {};
+      allPlaying.forEach(m => {
+        const s = m.sectie || 'Overig';
+        sectionTotals[s] = (sectionTotals[s] || 0) + 1;
+      });
+
+      upcomingList.forEach(opt => {
+        const absOnDate = ((DATA && DATA.afmeldingen) || []).filter(a => {
+          if (a.datum !== opt.datum) return false;
+          if (sectieFilter && sectieFilter !== 'ALL' && a.sectie !== sectieFilter) return false;
+          return true;
+        });
+
+        const vbOnDate = ((DATA && DATA.voorbehoud) || []).filter(v => {
+          if (sectieFilter && sectieFilter !== 'ALL' && v.sectie !== sectieFilter) return false;
+          if (v.excludedDates && Array.isArray(v.excludedDates) && v.excludedDates.indexOf(opt.datum) !== -1) return false;
+          if (v.isPeriod) return opt.datum >= v.periodStart && opt.datum <= v.periodEnd;
+          return v.datum === opt.datum;
+        });
+
+        const totalTarget = filteredPlaying.length || 1;
+        const absentCount = absOnDate.length;
+        const presentCount = Math.max(0, filteredPlaying.length - absentCount);
+        const presentPct = Math.round((presentCount / totalTarget) * 100);
+
+        let barColor = 'bg-emerald-500';
+        let pctBadgeColor = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+        if (presentPct < 75) {
+          barColor = 'bg-[#E30613]';
+          pctBadgeColor = 'bg-red-50 text-[#E30613] border-red-200';
+        } else if (presentPct < 90) {
+          barColor = 'bg-orange-500';
+          pctBadgeColor = 'bg-orange-50 text-orange-800 border-orange-200';
+        }
+
+        const absBySec = {};
+        ((DATA && DATA.afmeldingen) || []).filter(a => a.datum === opt.datum).forEach(a => {
+          const s = a.sectie || 'Overig';
+          absBySec[s] = (absBySec[s] || 0) + 1;
+        });
+
+        const secPillsHtml = sectionOrder
+          .filter(s => (sectieFilter === 'ALL' || !sectieFilter || s === sectieFilter) && sectionTotals[s] > 0)
+          .map(s => {
+            const totS = sectionTotals[s] || 0;
+            const absS = absBySec[s] || 0;
+            const presS = Math.max(0, totS - absS);
+            const pillClass = absS === 0
+              ? 'bg-white text-slate-600 border-slate-200'
+              : (presS / totS < 0.75 ? 'bg-red-50 text-[#E30613] border-red-200 font-bold' : 'bg-orange-50 text-orange-800 border-orange-200 font-semibold');
+            return `<span class="px-2 py-0.5 rounded text-[10px] border ${pillClass}">${escapeHtml(s)}: ${presS}/${totS}</span>`;
+          }).join('');
+
+        let namesHtml = '';
+        if (absOnDate.length === 0 && vbOnDate.length === 0) {
+          namesHtml = `<div class="text-[11px] text-emerald-700 font-medium">Volledige bezetting verwacht (0 afmeldingen)</div>`;
+        } else {
+          const parts = [];
+          if (absOnDate.length > 0) {
+            parts.push(`<div class="text-[11px] text-slate-700"><b class="text-[#E30613]">Afgemeld (${absOnDate.length}):</b> ${absOnDate.map(a => `${escapeHtml(a.naam)} <span class="text-[10px] text-slate-400">(${escapeHtml(a.sectie)})</span>`).join(', ')}</div>`);
+          }
+          if (vbOnDate.length > 0) {
+            parts.push(`<div class="text-[11px] text-orange-900"><b class="text-orange-800">Voorbehoud (${vbOnDate.length}):</b> ${vbOnDate.map(v => `${escapeHtml(v.naam)} <span class="text-[10px] text-orange-700">(${escapeHtml(v.sectie)})</span>`).join(', ')}</div>`);
+          }
+          namesHtml = parts.join('');
+        }
+
+        const card = document.createElement('div');
+        card.className = 'bg-slate-50 hover:bg-slate-100/80 rounded-lg p-3.5 border border-slate-200 transition cursor-pointer space-y-2.5';
+        card.onclick = () => jumpToOptredenDate(opt.datum);
+        card.innerHTML = `
+          <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+            <div>
+              <div class="flex items-center space-x-1.5">
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-[#E30613] text-white">Optreden</span>
+                <span class="text-xs font-semibold text-slate-600">${escapeHtml(formatDutchDateShort(opt.datum))}</span>
+              </div>
+              <h4 class="text-xs sm:text-sm font-extrabold text-[#1B2654] mt-1">${escapeHtml(opt.titel)}</h4>
+            </div>
+            <div class="sm:text-right flex sm:flex-col items-center sm:items-end justify-between gap-1">
+              <span class="inline-block px-2 py-0.5 rounded text-xs font-bold border ${pctBadgeColor}">
+                ${presentCount}/${filteredPlaying.length} (${presentPct}%)
+              </span>
+              <span class="text-[10px] text-slate-500">
+                ${absentCount} afgemeld${vbOnDate.length > 0 ? (' &bull; ' + vbOnDate.length + ' voorbehoud') : ''}
+              </span>
+            </div>
+          </div>
+
+          <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+            <div class="${barColor} h-full rounded-full transition-all" style="width: ${presentPct}%"></div>
+          </div>
+
+          <div class="flex flex-wrap gap-1">
+            ${secPillsHtml}
+          </div>
+
+          <div class="pt-1.5 border-t border-slate-200/80 space-y-1">
+            ${namesHtml}
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    // ==========================================
+    // PAGINA 2: OVERZICHT PER PERSOON
+    // ==========================================
+    let personQuickFilter = 'ALL';
+    let personSortCol = 'default';
+    let personSortAsc = false;
+    let LAST_COMPUTED_MEMBERS = [];
+
+    function getActiveNormSettings() {
+      const n = (DATA && DATA.norm) ? DATA.norm : {};
+      return {
+        ruimOpTijdDagen: Number(n.ruimOpTijdDagen) || 40,
+        opTijdDagen: Number(n.opTijdDagen) || 20,
+        laatDagen: Number(n.laatDagen) || 8,
+        zeerLaatDagen: Number(n.zeerLaatDagen) || 7,
+        drempelGroenPct: Number(n.drempelGroenPct) || 90,
+        drempelOranjePct: Number(n.drempelOranjePct) || 70,
+        drempelOranjeNietGeldig: Number(n.drempelOranjeNietGeldig) || 2,
+        drempelRoodPct: Number(n.drempelRoodPct) || 70,
+        drempelRoodOptredens: Number(n.drempelRoodOptredens) || 2,
+        gewichtRepetitie: Number(n.gewichtRepetitie) || 1,
+        gewichtOptreden: Number(n.gewichtOptreden) || 3
+      };
+    }
+
+    function classifyTijdigheid(record, norm) {
+      const rawT = String(record.tijdigheid || '').trim().toLowerCase();
+      const d = Number(record.dagenVooraf);
+      if (!isNaN(d) && record.dagenVooraf !== '' && record.dagenVooraf !== null && record.dagenVooraf !== undefined) {
+        if (d >= norm.ruimOpTijdDagen) return 'Ruim op tijd';
+        if (d >= norm.opTijdDagen) return 'Op tijd';
+        if (d >= norm.laatDagen) return 'Laat';
+        return 'Zeer laat';
+      }
+      if (rawT.indexOf('ruim') !== -1) return 'Ruim op tijd';
+      if (rawT.indexOf('zeer') !== -1) return 'Zeer laat';
+      if (rawT.indexOf('laat') !== -1) return 'Laat';
+      return 'Op tijd';
+    }
+
+    function setQuickFilter(f) {
+      personQuickFilter = f;
+
+      const buttons = ['all', 'rood', 'oranje', 'groen', 'optreden', 'laat', 'perfect'];
+      buttons.forEach(b => {
+        const btn = document.getElementById('qf-' + b);
+        if (!btn) return;
+        if (b === f.toLowerCase()) {
+          btn.className = 'px-2.5 py-1.5 rounded-lg font-semibold text-xs transition whitespace-nowrap bg-[#1B2654] text-white flex items-center space-x-1.5 flex-shrink-0';
+        } else {
+          let textCol = 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100';
+          if (b === 'rood') textCol = 'bg-slate-50 text-[#E30613] border-slate-200 hover:bg-red-50';
+          else if (b === 'oranje') textCol = 'bg-slate-50 text-orange-700 border-slate-200 hover:bg-orange-50';
+          else if (b === 'groen') textCol = 'bg-slate-50 text-emerald-800 border-slate-200 hover:bg-emerald-50';
+          btn.className = 'px-2.5 py-1.5 rounded-lg font-semibold text-xs transition whitespace-nowrap border flex items-center space-x-1.5 flex-shrink-0 ' + textCol;
+        }
+      });
+
+      renderPage2();
+    }
+
+    function sortPersonTable(col, fromMobile = false) {
+      if (fromMobile) {
+        personSortCol = col;
+        personSortAsc = (col === 'naam' || col === 'sectie' || col === 'gewogenPct');
+      } else {
+        if (personSortCol === col) {
+          personSortAsc = !personSortAsc;
+        } else {
+          personSortCol = col;
+          personSortAsc = (col === 'naam' || col === 'sectie' || col === 'gewogenPct');
+        }
+      }
+      renderPage2();
+    }
+
+    function doesActivityMatchSectie(doelgroep, sectie) {
+      const secLow = String(sectie || '').trim().toLowerCase();
+      if (doelgroep === 'all') return true;
+      if (doelgroep === 'slagwerk') return secLow === 'slagwerk';
+      if (doelgroep === 'brass') return ['trompet', 'mellofoon', 'bariton', 'trombone', 'sousafoon'].indexOf(secLow) !== -1;
+      return true;
+    }
+
+    function renderPage2() {
+      const sectieFilter = document.getElementById('person-sectie-filter').value;
+      const periodFilter = document.getElementById('person-period-filter').value;
+      const onlyAbsent = document.getElementById('person-only-absent').checked;
+      const search = (document.getElementById('person-search').value || '').toLowerCase();
+
+      renderUpcomingOptredensOverview('upcoming-optredens-list-p2', 'upcoming-optredens-count-p2', sectieFilter);
+
+      const norm = getActiveNormSettings();
+      const elGroen = document.getElementById('norm-lbl-groen');
+      if (elGroen) {
+        elGroen.textContent = norm.drempelGroenPct;
+        document.getElementById('norm-lbl-oranje').textContent = norm.drempelOranjePct + '-' + norm.drempelGroenPct;
+        document.getElementById('norm-lbl-ng').textContent = norm.drempelOranjeNietGeldig;
+        document.getElementById('norm-lbl-rood').textContent = norm.drempelRoodPct;
+        document.getElementById('norm-lbl-opt').textContent = norm.drempelRoodOptredens;
+        document.getElementById('norm-lbl-w-rep').textContent = norm.gewichtRepetitie;
+        document.getElementById('norm-lbl-w-opt').textContent = norm.gewichtOptreden;
+      }
+
+      const now = new Date();
+      const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+
+      const d90 = new Date();
+      d90.setDate(d90.getDate() - 90);
+      const date90DaysAgo = d90.toISOString().split('T')[0];
+
+      const d270 = new Date();
+      d270.setDate(d270.getDate() - 270);
+      const rollingDate = d270.toISOString().split('T')[0];
+
+      const seasonStartYear = (now.getMonth() >= 7) ? now.getFullYear() : (now.getFullYear() - 1);
+      const seasonStartDate = seasonStartYear + '-08-01';
+
+      function isPastDateInSelectedPeriod(datumStr) {
+        if (!datumStr) return false;
+        if (datumStr > todayStr) return false;
+        if (periodFilter === '90d' && datumStr < date90DaysAgo) return false;
+        if (periodFilter === 'rolling' && datumStr < rollingDate) return false;
+        if (periodFilter === 'season' && datumStr < seasonStartDate) return false;
+        return true;
+      }
+
+      const activityByDate = {};
+      if (DATA && DATA.agenda) {
+        DATA.agenda.forEach(ev => {
+          if (!isPastDateInSelectedPeriod(ev.datum)) return;
+          if (!activityByDate[ev.datum]) activityByDate[ev.datum] = [];
+          activityByDate[ev.datum].push({
+            datum: ev.datum,
+            type: ev.type || 'Repetitie',
+            doelgroep: getEventDoelgroep(ev)
+          });
+        });
+      }
+      if (DATA && DATA.afmeldingen) {
+        DATA.afmeldingen.forEach(a => {
+          if (!isPastDateInSelectedPeriod(a.datum)) return;
+          if (!activityByDate[a.datum]) {
+            const isOpt = (a.type || '').toLowerCase().indexOf('optreden') !== -1;
+            activityByDate[a.datum] = [{
+              datum: a.datum,
+              type: isOpt ? 'Optreden' : 'Repetitie',
+              doelgroep: 'all'
+            }];
+          }
+        });
+      }
+
+      const memberMap = {};
+      const nameToLidId = {};
+      if (DATA && DATA.leden) {
+        DATA.leden.forEach(m => {
+          nameToLidId[(m.naam || '').toLowerCase()] = m.lidId;
+          memberMap[m.lidId] = {
+            lidId: m.lidId,
+            naam: m.naam,
+            sectie: m.sectie,
+            status: m.status,
+            sectiehoofd: m.sectiehoofd || '',
+            hasPin: Boolean(m.hasPin),
+            total: 0,
+            repetitiesGemist: 0,
+            optredensGemist: 0,
+            nietAcceptabel: 0,
+            ruimOpTijdCount: 0,
+            opTijdCount: 0,
+            laatCount: 0,
+            zeerLaatCount: 0,
+            laatGemeld: 0,
+            laatsteDatum: '',
+            redenen: {},
+            records: [],
+            futureRecords: [],
+            futureOptredensCount: 0,
+            voorbehoud: [],
+            intrekkingen: []
+          };
+        });
+      }
+
+      if (DATA && DATA.afmeldingen) {
+        DATA.afmeldingen.forEach(a => {
+          const entry = memberMap[a.lidId] || memberMap[nameToLidId[(a.naam || '').toLowerCase()]];
+          if (!entry) return;
+
+          const tCat = classifyTijdigheid(a, norm);
+          const isOptreden = (a.type || '').toLowerCase().indexOf('optreden') !== -1;
+
+          if (a.datum > todayStr) {
+            entry.futureRecords.push(Object.assign({}, a, { tijdigheidNorm: tCat }));
+            if (isOptreden) entry.futureOptredensCount++;
+            return;
+          }
+
+          if (!isPastDateInSelectedPeriod(a.datum)) return;
+
+          entry.total++;
+          if (isOptreden) {
+            entry.optredensGemist++;
+          } else {
+            entry.repetitiesGemist++;
+          }
+          if ((a.validiteit || '').toLowerCase().indexOf('niet') !== -1) {
+            entry.nietAcceptabel++;
+          }
+
+          if (tCat === 'Ruim op tijd') entry.ruimOpTijdCount++;
+          else if (tCat === 'Op tijd') entry.opTijdCount++;
+          else if (tCat === 'Laat') { entry.laatCount++; entry.laatGemeld++; }
+          else if (tCat === 'Zeer laat') { entry.zeerLaatCount++; entry.laatGemeld++; }
+
+          if (!entry.laatsteDatum || a.datum > entry.laatsteDatum) entry.laatsteDatum = a.datum;
+          if (a.reden) entry.redenen[a.reden] = (entry.redenen[a.reden] || 0) + 1;
+          entry.records.push(Object.assign({}, a, { tijdigheidNorm: tCat }));
+        });
+      }
+
+      if (DATA && DATA.voorbehoud) {
+        DATA.voorbehoud.forEach(v => {
+          const entry = memberMap[v.lidId] || memberMap[nameToLidId[(v.naam || '').toLowerCase()]];
+          if (entry) entry.voorbehoud.push(v);
+        });
+      }
+
+      if (DATA && DATA.intrekkingen) {
+        DATA.intrekkingen.forEach(w => {
+          const entry = memberMap[w.lidId] || memberMap[nameToLidId[(w.naam || '').toLowerCase()]];
+          if (entry) entry.intrekkingen.push(w);
+        });
+      }
+
+      let rawAllList = Object.values(memberMap);
+      rawAllList.forEach(m => {
+        const absentDatesMap = {};
+        m.records.forEach(r => {
+          const isOpt = (r.type || '').toLowerCase().indexOf('optreden') !== -1;
+          absentDatesMap[r.datum] = isOpt ? 'Optreden' : 'Repetitie';
+        });
+
+        let mogelijkePunten = 0;
+        let aantalMogelijkeRep = 0;
+        let aantalMogelijkeOpt = 0;
+
+        Object.keys(activityByDate).forEach(dStr => {
+          const evList = activityByDate[dStr].filter(ev => doesActivityMatchSectie(ev.doelgroep, m.sectie));
+          const hasMemberAbsenceOnDate = Boolean(absentDatesMap[dStr]);
+          if (evList.length > 0 || hasMemberAbsenceOnDate) {
+            const isOpt = evList.some(e => e.type === 'Optreden') || absentDatesMap[dStr] === 'Optreden';
+            if (isOpt) {
+              mogelijkePunten += norm.gewichtOptreden;
+              aantalMogelijkeOpt++;
+            } else {
+              mogelijkePunten += norm.gewichtRepetitie;
+              aantalMogelijkeRep++;
+            }
+          }
+        });
+
+        const gemistePunten = (m.repetitiesGemist * norm.gewichtRepetitie) + (m.optredensGemist * norm.gewichtOptreden);
+        if (mogelijkePunten < gemistePunten) {
+          mogelijkePunten = gemistePunten;
+        }
+        const behaaldePunten = Math.max(0, mogelijkePunten - gemistePunten);
+        const gewogenPct = (m.total === 0 || mogelijkePunten === 0)
+          ? 100
+          : Math.max(0, Math.round((behaaldePunten / mogelijkePunten) * 100));
+
+        m.mogelijkePunten = mogelijkePunten;
+        m.gemistePunten = gemistePunten;
+        m.behaaldePunten = behaaldePunten;
+        m.aantalMogelijkeRep = aantalMogelijkeRep;
+        m.aantalMogelijkeOpt = aantalMogelijkeOpt;
+        m.gewogenPct = gewogenPct;
+
+        m.normReasons = [];
+        if (m.gewogenPct < norm.drempelRoodPct || m.optredensGemist >= norm.drempelRoodOptredens) {
+          m.normKleur = 'ROOD';
+          if (m.gewogenPct < norm.drempelRoodPct) m.normReasons.push('< ' + norm.drempelRoodPct + '% aanwezig');
+          if (m.optredensGemist >= norm.drempelRoodOptredens) m.normReasons.push(m.optredensGemist + 'x optreden gemist');
+          if (m.nietAcceptabel >= norm.drempelOranjeNietGeldig) m.normReasons.push(m.nietAcceptabel + 'x niet-geldig');
+        } else if (m.gewogenPct < norm.drempelGroenPct || m.nietAcceptabel >= norm.drempelOranjeNietGeldig) {
+          m.normKleur = 'ORANJE';
+          if (m.gewogenPct < norm.drempelGroenPct) m.normReasons.push('Aanwezigheid ' + m.gewogenPct + '%');
+          if (m.nietAcceptabel >= norm.drempelOranjeNietGeldig) m.normReasons.push(m.nietAcceptabel + 'x niet-geldig');
+          if (m.optredensGemist === 1) m.normReasons.push('1x optreden gemist');
+        } else {
+          m.normKleur = 'GROEN';
+        }
+
+        if (m.zeerLaatCount > 0) {
+          m.normReasons.push(m.zeerLaatCount + 'x zeer laat');
+        } else if (m.laatCount >= 2) {
+          m.normReasons.push(m.laatCount + 'x laat');
+        }
+
+        m.flags = m.normKleur !== 'GROEN' ? m.normReasons.slice() : [];
+
+        let maxR = '-';
+        let maxRC = 0;
+        Object.keys(m.redenen).forEach(r => {
+          if (m.redenen[r] > maxRC) { maxRC = m.redenen[r]; maxR = r; }
+        });
+        m.meestVoorkomend = maxR;
+      });
+
+      LAST_COMPUTED_MEMBERS = rawAllList;
+
+      let allList = rawAllList.filter(m => {
+        const st = String(m.status || '').trim().toLowerCase();
+        const sc = String(m.sectie || '').trim().toUpperCase();
+        if (st === 'gestopt' || st === 'niet spelend' || sc === 'X') {
+          return m.total > 0;
+        }
+        return true;
+      });
+
+      let roodCount = 0;
+      let oranjeCount = 0;
+      let totalAbs = 0;
+      let sumWeightedPct = 0;
+      allList.forEach(m => {
+        totalAbs += m.total;
+        sumWeightedPct += m.gewogenPct;
+        if (m.normKleur === 'ROOD') roodCount++;
+        else if (m.normKleur === 'ORANJE') oranjeCount++;
+      });
+
+      const avgWeighted = allList.length > 0 ? Math.round(sumWeightedPct / allList.length) : 100;
+      document.getElementById('kpi-members-count').textContent = allList.length;
+      document.getElementById('kpi-members-absent').textContent = allList.filter(m => m.total > 0).length;
+      document.getElementById('kpi-avg-weighted').textContent = 'gem. ' + avgWeighted + '% aanwezig';
+      document.getElementById('kpi-flagged-count').textContent = (roodCount + oranjeCount);
+      document.getElementById('kpi-flagged-sub').innerHTML = roodCount + ' rood &bull; ' + oranjeCount + ' oranje';
+      document.getElementById('kpi-total-absences').textContent = totalAbs;
+
+      let list = search ? rawAllList : allList;
+      if (sectieFilter !== 'ALL') {
+        list = list.filter(m => m.sectie === sectieFilter);
+      }
+
+      const countAll = list.length;
+      const countRood = list.filter(m => m.normKleur === 'ROOD').length;
+      const countOranje = list.filter(m => m.normKleur === 'ORANJE').length;
+      const countGroen = list.filter(m => m.normKleur === 'GROEN').length;
+      const countOptreden = list.filter(m => m.optredensGemist > 0).length;
+      const countLaat = list.filter(m => m.laatGemeld > 0).length;
+      const countPerfect = list.filter(m => m.total === 0).length;
+
+      document.getElementById('qf-count-all').textContent = countAll;
+      document.getElementById('qf-count-rood').textContent = countRood;
+      document.getElementById('qf-count-oranje').textContent = countOranje;
+      document.getElementById('qf-count-groen').textContent = countGroen;
+      document.getElementById('qf-count-optreden').textContent = countOptreden;
+      document.getElementById('qf-count-laat').textContent = countLaat;
+      document.getElementById('qf-count-perfect').textContent = countPerfect;
+
+      if (personQuickFilter === 'ROOD') {
+        list = list.filter(m => m.normKleur === 'ROOD');
+      } else if (personQuickFilter === 'ORANJE') {
+        list = list.filter(m => m.normKleur === 'ORANJE');
+      } else if (personQuickFilter === 'GROEN') {
+        list = list.filter(m => m.normKleur === 'GROEN');
+      } else if (personQuickFilter === 'OPTREDEN') {
+        list = list.filter(m => m.optredensGemist > 0);
+      } else if (personQuickFilter === 'LAAT') {
+        list = list.filter(m => m.laatGemeld > 0);
+      } else if (personQuickFilter === 'PERFECT') {
+        list = list.filter(m => m.total === 0);
+      } else {
+        if (onlyAbsent && !search) list = list.filter(m => m.total > 0);
+      }
+
+      if (search) {
+        list = list.filter(m => m.naam.toLowerCase().includes(search) || m.lidId.toLowerCase().includes(search));
+      }
+
+      function normSeverityScore(m) {
+        if (m.normKleur === 'ROOD') return 300 + (100 - m.gewogenPct) + m.optredensGemist * 5;
+        if (m.normKleur === 'ORANJE') return 200 + (100 - m.gewogenPct) + m.nietAcceptabel * 5;
+        if (m.total > 0) return 100 + (100 - m.gewogenPct) + m.total;
+        return 0;
+      }
+
+      list.sort((a, b) => {
+        let valA, valB;
+        switch (personSortCol) {
+          case 'naam':
+            valA = a.naam; valB = b.naam;
+            return personSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+          case 'sectie':
+            valA = a.sectie; valB = b.sectie;
+            return personSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+          case 'gewogenPct':
+            valA = a.gewogenPct; valB = b.gewogenPct;
+            return personSortAsc ? valA - valB : valB - valA;
+          case 'total':
+            valA = a.total; valB = b.total;
+            return personSortAsc ? valA - valB : valB - valA;
+          case 'nietAcceptabel':
+            valA = a.nietAcceptabel; valB = b.nietAcceptabel;
+            return personSortAsc ? valA - valB : valB - valA;
+          case 'optredens':
+            valA = a.optredensGemist; valB = b.optredensGemist;
+            return personSortAsc ? valA - valB : valB - valA;
+          case 'laat':
+            valA = a.laatGemeld; valB = b.laatGemeld;
+            return personSortAsc ? valA - valB : valB - valA;
+          case 'datum':
+            valA = a.laatsteDatum || ''; valB = b.laatsteDatum || '';
+            return personSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+          case 'reden':
+            valA = a.meestVoorkomend || ''; valB = b.meestVoorkomend || '';
+            return personSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+          case 'status':
+            valA = normSeverityScore(a);
+            valB = normSeverityScore(b);
+            return personSortAsc ? valA - valB : valB - valA;
+          default:
+            return normSeverityScore(b) - normSeverityScore(a);
+        }
+      });
+
+      const sortCols = ['naam', 'sectie', 'gewogenPct', 'total', 'nietAcceptabel', 'optredens', 'laat', 'datum', 'reden', 'status'];
+      sortCols.forEach(c => {
+        const el = document.getElementById('th-sort-' + c);
+        if (!el) return;
+        if (personSortCol === c) {
+          el.textContent = personSortAsc ? '\u25B2' : '\u25BC';
+          el.className = 'text-[#1B2654] font-black text-[11px]';
+        } else {
+          el.textContent = '\u21C5';
+          el.className = 'text-slate-400 text-[10px]';
+        }
+      });
+
+      document.getElementById('person-table-count').textContent = list.length + (list.length === 1 ? ' lid' : ' leden');
+
+      const tbody = document.getElementById('person-table-body-desktop');
+      tbody.innerHTML = '';
+
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="py-8 text-center text-slate-400">Geen leden gevonden voor deze selectie.</td></tr>';
+      } else {
+        list.forEach(m => {
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-slate-50 cursor-pointer transition';
+          tr.onclick = () => openMemberDrawer(m);
+
+          let pctBadgeClass = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+          if (m.normKleur === 'ROOD') pctBadgeClass = 'bg-red-50 text-[#E30613] border-red-200';
+          else if (m.normKleur === 'ORANJE') pctBadgeClass = 'bg-orange-50 text-orange-800 border-orange-300';
+
+          const pctHtml = `
+            <div class="inline-flex flex-col items-center">
+              <span class="px-2 py-0.5 rounded text-xs font-bold border ${pctBadgeClass}">${m.gewogenPct}%</span>
+              <span class="text-[10px] text-slate-400 mt-0.5">${m.behaaldePunten}/${m.mogelijkePunten} pt</span>
+            </div>
+          `;
+
+          let badges = '';
+          if (m.total === 0) {
+            badges = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">100% Aanwezig</span>';
+          } else if (m.normKleur === 'GROEN') {
+            badges = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">Groen</span>';
+            if (m.normReasons.length > 0) {
+              badges += ' ' + m.normReasons.map(f => `<span class="inline-block px-1.5 py-0.5 rounded text-[10px] ml-1 bg-slate-100 text-slate-600 font-medium border border-slate-200">${escapeHtml(f)}</span>`).join('');
+            }
+          } else if (m.normKleur === 'ORANJE') {
+            badges = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-orange-500 text-white border border-orange-600 mr-1 mb-1">Oranje</span>';
+            badges += m.normReasons.map(f => `<span class="inline-block px-1.5 py-0.5 rounded text-[10px] mr-1 mb-1 bg-orange-50 text-orange-800 font-semibold border border-orange-200">${escapeHtml(f)}</span>`).join('');
+          } else {
+            badges = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-[#E30613] text-white border border-red-700 mr-1 mb-1">Rood</span>';
+            badges += m.normReasons.map(f => `<span class="inline-block px-1.5 py-0.5 rounded text-[10px] mr-1 mb-1 bg-red-50 text-[#E30613] font-semibold border border-red-200">${escapeHtml(f)}</span>`).join('');
+          }
+
+          if (m.futureRecords && m.futureRecords.length > 0) {
+            const futLabel = m.futureOptredensCount > 0
+              ? `+${m.futureRecords.length} komend (${m.futureOptredensCount} optr.)`
+              : `+${m.futureRecords.length} komend`;
+            badges += ` <span class="inline-block px-1.5 py-0.5 rounded text-[10px] mr-1 mb-1 bg-blue-50 text-[#28367B] font-semibold border border-blue-200">${escapeHtml(futLabel)}</span>`;
+          }
+          if (m.voorbehoud && m.voorbehoud.length > 0) {
+            badges += ` <span class="inline-block px-1.5 py-0.5 rounded text-[10px] mr-1 mb-1 bg-orange-50 text-orange-800 font-semibold border border-orange-200">${m.voorbehoud.length} voorbehoud</span>`;
+          }
+
+          let laatHtml = `<span class="${m.laatGemeld > 0 ? 'text-orange-700 font-bold' : 'text-slate-400'}">${m.laatGemeld}</span>`;
+          if (m.zeerLaatCount > 0) {
+            laatHtml += `<span class="block text-[9px] text-[#E30613] font-bold">${m.zeerLaatCount}x zeer laat</span>`;
+          }
+
+          tr.innerHTML = `
+            <td class="py-3 px-4 font-bold text-slate-900">${escapeHtml(m.naam)}</td>
+            <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[11px] font-bold bg-[#BCE3F9]/60 text-[#1B2654]">${escapeHtml(m.sectie)}</span></td>
+            <td class="py-3 px-3 text-center">${pctHtml}</td>
+            <td class="py-3 px-3 text-center font-bold text-slate-800">${m.total}</td>
+            <td class="py-3 px-3 text-center font-bold ${m.nietAcceptabel >= norm.drempelOranjeNietGeldig ? 'text-[#E30613]' : (m.nietAcceptabel > 0 ? 'text-orange-700' : 'text-slate-400')}">${m.nietAcceptabel}</td>
+            <td class="py-3 px-3 text-center font-bold ${m.optredensGemist >= norm.drempelRoodOptredens ? 'text-[#E30613]' : (m.optredensGemist > 0 ? 'text-orange-700' : 'text-slate-400')}">${m.optredensGemist}</td>
+            <td class="py-3 px-3 text-center">${laatHtml}</td>
+            <td class="py-3 px-3 text-slate-600 text-xs">${escapeHtml(m.laatsteDatum || '-')}</td>
+            <td class="py-3 px-3 text-slate-700 truncate max-w-[130px]">${escapeHtml(m.meestVoorkomend)}</td>
+            <td class="py-3 px-4">${badges}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      // Mobiele kaartjes renderen
+      const mobileContainer = document.getElementById('person-cards-mobile');
+      mobileContainer.innerHTML = '';
+
+      if (list.length === 0) {
+        mobileContainer.innerHTML = '<div class="py-8 text-center text-slate-400 text-xs">Geen leden gevonden voor deze selectie.</div>';
+      } else {
+        list.forEach(m => {
+          let mobileBadges = '';
+          if (m.total === 0) {
+            mobileBadges = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">100% Aanwezig</span>';
+          } else if (m.normKleur === 'GROEN') {
+            mobileBadges = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">Groen (${m.gewogenPct}%)</span>`;
+          } else if (m.normKleur === 'ORANJE') {
+            mobileBadges = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-orange-500 text-white border border-orange-600">Oranje (${m.gewogenPct}%)</span>`;
+          } else {
+            mobileBadges = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-[#E30613] text-white border border-red-700">Rood (${m.gewogenPct}%)</span>`;
+          }
+
+          const card = document.createElement('div');
+          card.className = 'bg-white p-3 rounded-lg border border-slate-200 space-y-2 cursor-pointer active:bg-slate-50';
+          card.onclick = () => openMemberDrawer(m);
+
+          card.innerHTML = `
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="font-bold text-slate-900 text-sm truncate">${escapeHtml(m.naam)}</div>
+                <div class="flex items-center gap-1.5 mt-0.5">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-[#BCE3F9]/60 text-[#1B2654]">${escapeHtml(m.sectie)}</span>
+                </div>
+              </div>
+              <div class="text-right flex-shrink-0">${mobileBadges}</div>
+            </div>
+            ${m.total === 0 ? `
+              <div class="text-[11px] font-medium text-emerald-800 bg-emerald-50/60 py-1.5 px-2.5 rounded border border-emerald-100">
+                Geen afmeldingen in deze periode (100% aanwezig)
+              </div>
+            ` : `
+              <div class="grid grid-cols-4 gap-1.5 text-center bg-slate-50 p-2 rounded border border-slate-100 text-xs">
+                <div><span class="block text-[10px] text-slate-400">Totaal</span><b class="text-slate-800 font-bold">${m.total}</b></div>
+                <div><span class="block text-[10px] text-slate-400">Optreden</span><b class="${m.optredensGemist > 0 ? 'text-[#E30613]' : 'text-slate-400'}">${m.optredensGemist}</b></div>
+                <div><span class="block text-[10px] text-slate-400">Niet geldig</span><b class="${m.nietAcceptabel > 0 ? 'text-[#E30613]' : 'text-slate-400'}">${m.nietAcceptabel}</b></div>
+                <div><span class="block text-[10px] text-slate-400">Laat</span><b class="${m.laatGemeld > 0 ? 'text-orange-700' : 'text-slate-400'}">${m.laatGemeld}</b></div>
+              </div>
+            `}
+          `;
+          mobileContainer.appendChild(card);
+        });
+      }
+    }
+
+    function reopenCurrentDrawerMember() {
+      if (!SELECTED_DRAWER_MEMBER) return;
+      const updated = LAST_COMPUTED_MEMBERS.find(x => x.lidId === SELECTED_DRAWER_MEMBER.lidId || x.naam === SELECTED_DRAWER_MEMBER.naam);
+      if (updated) openMemberDrawer(updated, true);
+    }
+
+    function openMemberDrawer(m, skipScroll) {
+      SELECTED_DRAWER_MEMBER = m;
+      const norm = getActiveNormSettings();
+      const drawer = document.getElementById('member-drawer');
+      drawer.classList.remove('hidden');
+      document.getElementById('drawer-member-name').textContent = m.naam + ' (' + m.sectie + ')';
+      document.getElementById('drawer-member-sub').textContent = m.total + ' afmeldingen in gekozen periode';
+
+      const resetBtn = document.getElementById('drawer-reset-pin-btn');
+      const noPinBadge = document.getElementById('drawer-no-pin-badge');
+      if (m.hasPin) {
+        resetBtn.classList.remove('hidden');
+        resetBtn.disabled = false;
+        resetBtn.textContent = 'Pincode resetten';
+        noPinBadge.classList.add('hidden');
+      } else {
+        resetBtn.classList.add('hidden');
+        noPinBadge.classList.remove('hidden');
+      }
+
+      const normSummaryEl = document.getElementById('drawer-norm-summary');
+      if (normSummaryEl) {
+        let drempelTitle = 'Groen (&ge;' + norm.drempelGroenPct + '%)';
+        let drempelBoxClass = 'bg-emerald-50 border-emerald-200 text-emerald-900';
+        if (m.normKleur === 'ROOD') {
+          drempelTitle = 'Rood (Aandacht)';
+          drempelBoxClass = 'bg-red-50 border-red-200 text-red-900';
+        } else if (m.normKleur === 'ORANJE') {
+          drempelTitle = 'Oranje (Bespreekbaar)';
+          drempelBoxClass = 'bg-orange-50 border-orange-300 text-orange-900';
+        }
+
+        const reasonText = (m.normReasons && m.normReasons.length > 0)
+          ? m.normReasons.join(' \u2022 ')
+          : 'Voldoet aan de aanwezigheidsnorm in de geselecteerde periode';
+
+        normSummaryEl.innerHTML = `
+          <div class="p-3 rounded-lg border ${drempelBoxClass}">
+            <div class="text-[10px] font-bold uppercase tracking-wider opacity-75">Normstatus</div>
+            <div class="text-sm font-extrabold mt-0.5">${drempelTitle}</div>
+            <div class="text-[11px] font-medium mt-1">${escapeHtml(reasonText)}</div>
+          </div>
+          <div class="p-3 rounded-lg border bg-slate-50 border-slate-200 text-slate-800">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Gewogen Aanwezigheid</div>
+            <div class="text-base font-extrabold text-[#1B2654] mt-0.5">${m.gewogenPct}% <span class="text-xs font-semibold text-slate-500">(${m.behaaldePunten} / ${m.mogelijkePunten} pt)</span></div>
+            <div class="text-[11px] text-slate-500 mt-0.5">Gemist: ${m.repetitiesGemist}x Rep (${norm.gewichtRepetitie} pt) &bull; ${m.optredensGemist}x Optr (${norm.gewichtOptreden} pt)</div>
+          </div>
+          <div class="p-3 rounded-lg border bg-slate-50 border-slate-200 text-slate-800">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tijdigheid Afmeldingen</div>
+            <div class="grid grid-cols-2 gap-x-2 gap-y-1 mt-1 text-[11px]">
+              <div><span class="text-emerald-700 font-semibold">Ruim op tijd:</span> <b>${m.ruimOpTijdCount || 0}</b></div>
+              <div><span class="text-blue-700 font-semibold">Op tijd:</span> <b>${m.opTijdCount || 0}</b></div>
+              <div><span class="text-orange-700 font-semibold">Laat:</span> <b>${m.laatCount || 0}</b></div>
+              <div><span class="text-[#E30613] font-semibold">Zeer laat:</span> <b>${m.zeerLaatCount || 0}</b></div>
+            </div>
+          </div>
+        `;
+      }
+
+      const tbody = document.getElementById('drawer-table-body');
+      tbody.innerHTML = '';
+      if (m.records.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-slate-400">Geen afmeldingen in deze periode.</td></tr>';
+      } else {
+        m.records.slice().sort((a,b) => b.datum.localeCompare(a.datum)).forEach(r => {
+          const isOpt = (r.type || '').toLowerCase().indexOf('optreden') !== -1;
+          const wPt = isOpt ? norm.gewichtOptreden : norm.gewichtRepetitie;
+          const tCat = r.tijdigheidNorm || classifyTijdigheid(r, norm);
+          let tBadge = 'bg-blue-50 text-blue-700 border-blue-200';
+          if (tCat === 'Ruim op tijd') tBadge = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+          else if (tCat === 'Laat') tBadge = 'bg-orange-50 text-orange-800 border-orange-200';
+          else if (tCat === 'Zeer laat') tBadge = 'bg-red-50 text-[#E30613] border-red-200 font-bold';
+
+          const valLow = (r.validiteit || '').toLowerCase();
+          let valColor = 'text-emerald-700 font-semibold';
+          if (valLow.indexOf('niet') !== -1) valColor = 'text-[#E30613] font-bold';
+          else if (valLow.indexOf('bespreek') !== -1) valColor = 'text-orange-700 font-bold';
+
+          const manualSpan = r.handmatigBeoordeeld
+            ? `<span class="inline-block ml-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-[#1B2654] text-white" title="${escapeAttr(r.beoordeeldDoor || 'Bestuur')}">Bestuur</span>`
+            : '';
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="py-2 font-semibold whitespace-nowrap align-top">${escapeHtml(r.datum)}</td>
+            <td class="py-2 whitespace-nowrap align-top"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${isOpt ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}">${escapeHtml(r.type)} (${wPt} pt)</span></td>
+            <td class="py-2 align-top">${escapeHtml(r.reden)}</td>
+            <td class="py-2 align-top">
+              <div><span class="${valColor}">${escapeHtml(r.validiteit)}</span>${manualSpan}</div>
+              ${renderBestuurActionButtonsHtml(r, true)}
+            </td>
+            <td class="py-2 whitespace-nowrap align-top"><span class="px-1.5 py-0.5 rounded text-[10px] border ${tBadge}">${escapeHtml(tCat)}</span> <span class="text-[10px] text-slate-400">(${Number(r.dagenVooraf) || 0}d)</span></td>
+            <td class="py-2 align-top max-w-xs">${renderToelichtingHtml(r) || '<span class="text-slate-400">-</span>'}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      const futSec = document.getElementById('drawer-future-section');
+      const futBody = document.getElementById('drawer-future-body');
+      if (futSec && futBody) {
+        futBody.innerHTML = '';
+        if (m.futureRecords && m.futureRecords.length > 0) {
+          futSec.classList.remove('hidden');
+          m.futureRecords.slice().sort((a,b) => a.datum.localeCompare(b.datum)).forEach(r => {
+            const isOpt = (r.type || '').toLowerCase().indexOf('optreden') !== -1;
+            const tCat = r.tijdigheidNorm || classifyTijdigheid(r, norm);
+            const valLow = (r.validiteit || '').toLowerCase();
+            let valColor = 'text-emerald-700 font-semibold';
+            if (valLow.indexOf('niet') !== -1) valColor = 'text-[#E30613] font-bold';
+            else if (valLow.indexOf('bespreek') !== -1) valColor = 'text-orange-700 font-bold';
+
+            const manualSpan = r.handmatigBeoordeeld
+              ? `<span class="inline-block ml-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-[#1B2654] text-white" title="${escapeAttr(r.beoordeeldDoor || 'Bestuur')}">Bestuur</span>`
+              : '';
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td class="py-2 font-bold text-[#1B2654] whitespace-nowrap align-top">${escapeHtml(r.datum)}</td>
+              <td class="py-2 whitespace-nowrap align-top"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${isOpt ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}">${escapeHtml(r.type)}</span></td>
+              <td class="py-2 align-top">${escapeHtml(r.reden)}</td>
+              <td class="py-2 align-top">
+                <div><span class="${valColor}">${escapeHtml(r.validiteit)}</span>${manualSpan}</div>
+                ${renderBestuurActionButtonsHtml(r, true)}
+              </td>
+              <td class="py-2 text-emerald-700 font-semibold whitespace-nowrap align-top">${escapeHtml(tCat)} (${Number(r.dagenVooraf) || 0}d)</td>
+              <td class="py-2 align-top max-w-xs">${renderToelichtingHtml(r) || '<span class="text-slate-400">-</span>'}</td>
+            `;
+            futBody.appendChild(tr);
+          });
+        } else {
+          futSec.classList.add('hidden');
+        }
+      }
+
+      const vbSec = document.getElementById('drawer-voorbehoud-section');
+      const vbBody = document.getElementById('drawer-voorbehoud-body');
+      vbBody.innerHTML = '';
+      if (m.voorbehoud && m.voorbehoud.length > 0) {
+        vbSec.classList.remove('hidden');
+        m.voorbehoud.forEach(v => {
+          const rangeLabel = v.isPeriod
+            ? (v.periodStart + ' t/m ' + v.periodEnd)
+            : v.datum;
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="py-2 font-bold text-orange-950 whitespace-nowrap align-top">${escapeHtml(rangeLabel)}</td>
+            <td class="py-2 font-medium text-orange-900 align-top">${escapeHtml(v.reden || '-')}</td>
+            <td class="py-2 align-top">${renderToelichtingHtml(v) || '<span class="text-orange-800">-</span>'}</td>
+            <td class="py-2 text-orange-700 whitespace-nowrap align-top">${escapeHtml(v.ingediend || '-')}</td>
+          `;
+          vbBody.appendChild(tr);
+        });
+      } else {
+        vbSec.classList.add('hidden');
+      }
+
+      const wdSec = document.getElementById('drawer-withdrawn-section');
+      const wdBody = document.getElementById('drawer-withdrawn-body');
+      wdBody.innerHTML = '';
+      if (m.intrekkingen && m.intrekkingen.length > 0) {
+        wdSec.classList.remove('hidden');
+        m.intrekkingen.slice().sort((a,b) => (b.datum || '').localeCompare(a.datum || '')).forEach(w => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="py-2 text-slate-700 whitespace-nowrap">${escapeHtml(w.datum)}</td>
+            <td class="py-2 whitespace-nowrap"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700">${escapeHtml(w.type || 'Repetitie')}</span></td>
+            <td class="py-2 text-slate-500">${escapeHtml(w.reden || '-')}</td>
+            <td class="py-2 font-semibold text-slate-800 italic">"${escapeHtml(w.redenIntrekking || '-')}"</td>
+            <td class="py-2 text-slate-500 whitespace-nowrap">${escapeHtml(w.ingediend || '-')}</td>
+          `;
+          wdBody.appendChild(tr);
+        });
+      } else {
+        wdSec.classList.add('hidden');
+      }
+
+      if (!skipScroll) {
+        drawer.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    function resetSelectedMemberPin() {
+      if (!SELECTED_DRAWER_MEMBER || !CURRENT_ADMIN) return;
+      const m = SELECTED_DRAWER_MEMBER;
+      const ok = confirm('Weet je zeker dat je de 4-cijferige pincode van ' + m.naam + ' wilt wissen?\n\nDit lid kan bij het volgende bezoek direct een nieuwe pincode kiezen.');
+      if (!ok) return;
+
+      const resetBtn = document.getElementById('drawer-reset-pin-btn');
+      const noPinBadge = document.getElementById('drawer-no-pin-badge');
+      resetBtn.disabled = true;
+      resetBtn.textContent = 'Bezig...';
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function() {
+            m.hasPin = false;
+            if (DATA && DATA.leden) {
+              const found = DATA.leden.find(l => l.lidId === m.lidId);
+              if (found) found.hasPin = false;
+            }
+            resetBtn.classList.add('hidden');
+            noPinBadge.textContent = 'Pincode zojuist gereset';
+            noPinBadge.classList.remove('hidden');
+          })
+          .withFailureHandler(function(err) {
+            resetBtn.disabled = false;
+            resetBtn.textContent = 'Pincode resetten';
+            alert('Fout bij resetten pincode: ' + ((err && err.message) ? err.message : String(err)));
+          })
+          .resetMemberPinByAdmin(CURRENT_ADMIN.lidId, CURRENT_ADMIN.pin, m.lidId);
+      }
+    }
+
+    function closeMemberDrawer() {
+      document.getElementById('member-drawer').classList.add('hidden');
+    }
+
+    function startApp() {
+      initAuthFlow();
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', startApp);
+    } else {
+      startApp();
+    }
+  </script>
+</body>
+</html>
