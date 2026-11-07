@@ -1,0 +1,1638 @@
+﻿<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <!-- Web App manifest & startscherm icoon instellingen -->
+  <link rel="icon" type="image/svg+xml" href="https://admin.ktkkampen.nl/uploads/KTK-logos/logo.svg">
+  <link rel="apple-touch-icon" href="https://admin.ktkkampen.nl/uploads/KTK-logos/logo.svg">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="KTK Afmelden">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>KTK Kampen - Afmelden</title>
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#1B2654">
+  <link rel="manifest" href="./manifest.json">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ktk: {
+              navy: '#1B2654',
+              blue: '#28367B',
+              red: '#E30613',
+              light: '#BCE3F9',
+              bg: '#F4F6FA'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Montserrat', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #F4F6FA; }
+    h1, h2, h3, .font-display { font-family: 'Montserrat', sans-serif; }
+    .pin-input { letter-spacing: 0.55em; text-indent: 0.55em; }
+    .step-anim {
+      animation: fadeStep 0.2s ease-out forwards;
+    }
+    @keyframes fadeStep {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+  <script>
+    // =========================================================================
+    // KTK GITHUB PAGES -> GOOGLE APPS SCRIPT API BRIDGE
+    // Laat alle google.script.run aanroepen via fetch() werken op GitHub Pages,
+    // zonder de bestaande Google Apps Script omgeving te verstoren.
+    // =========================================================================
+    (function() {
+      if (typeof window.google !== 'undefined' && window.google.script && window.google.script.run) {
+        return;
+      }
+
+      const KTK_API_URL = 'https://script.google.com/macros/s/AKfycbwhSIHa7asKuidwN5V31eK0GFrIV_zySqwW4AJsqw6pOmlAKLfaOLAcek_-uhy_qoFGGg/exec';
+
+      const API_METHODS = [
+        'getLedenInitData',
+        'setupMemberPin',
+        'loginMember',
+        'submitMemberAbsence',
+        'withdrawMemberAbsence',
+        'getDashboardAuthInit',
+        'setupDashboardPin',
+        'loginDashboard',
+        'getDashboardData',
+        'resetMemberPinByAdmin',
+        'setManualAbsenceJudgment',
+        'saveMemberByAdmin',
+        'deleteMemberByAdmin',
+        'saveConfigReasonsByAdmin',
+        'saveNormSettingsByAdmin'
+      ];
+
+      function createRunner(successHandler, failureHandler) {
+        const runner = {
+          withSuccessHandler: function(fn) {
+            return createRunner(fn, failureHandler);
+          },
+          withFailureHandler: function(fn) {
+            return createRunner(successHandler, fn);
+          }
+        };
+
+        API_METHODS.forEach(function(methodName) {
+          runner[methodName] = function() {
+            const args = Array.prototype.slice.call(arguments);
+            fetch(KTK_API_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({ action: methodName, args: args }),
+              redirect: 'follow'
+            })
+              .then(function(res) {
+                if (!res.ok) throw new Error('Netwerkfout (' + res.status + ')');
+                return res.json();
+              })
+              .then(function(data) {
+                if (data && data.ok) {
+                  if (typeof successHandler === 'function') {
+                    successHandler(data.result);
+                  }
+                } else {
+                  const errMsg = (data && data.error) ? data.error : 'Er is een onbekende fout opgetreden.';
+                  if (typeof failureHandler === 'function') {
+                    failureHandler(new Error(errMsg));
+                  } else {
+                    console.error('KTK API fout:', errMsg);
+                  }
+                }
+              })
+              .catch(function(err) {
+                if (typeof failureHandler === 'function') {
+                  failureHandler(err);
+                } else {
+                  console.error('KTK verbinding mislukt:', err);
+                }
+              });
+          };
+        });
+
+        return runner;
+      }
+
+      window.google = {
+        script: {
+          run: createRunner(null, null)
+        }
+      };
+    })();
+  </script>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+
+  <!-- Header met officieel KTK Kampen logo -->
+  <header class="bg-[#1B2654] text-white border-b-[3px] border-[#E30613] shadow-md sticky top-0 z-40">
+    <div class="max-w-xl mx-auto px-3.5 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between gap-2.5">
+      <div class="flex items-center space-x-3 min-w-0">
+        <div class="h-9 sm:h-11 w-auto flex-shrink-0 flex items-center justify-center">
+          <img src="https://admin.ktkkampen.nl/uploads/KTK-logos/logo.svg" alt="KTK Kampen" class="h-9 sm:h-11 w-auto object-contain" />
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center space-x-2">
+            <h1 class="text-sm sm:text-base font-extrabold tracking-tight uppercase truncate">KTK Afmelden</h1>
+            <span class="bg-[#E30613] text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0">Leden</span>
+          </div>
+          <p class="text-[11px] text-slate-300 font-medium truncate">KTK &bull; Friendship. Music. Progress.</p>
+        </div>
+      </div>
+
+      <!-- Knop om gebruiker te wisselen (alleen zichtbaar als ingelogd) -->
+      <button id="header-logout-btn" onclick="logoutMember()" class="hidden px-2.5 py-1.5 bg-white/10 hover:bg-[#E30613] text-slate-100 hover:text-white rounded-lg border border-white/10 text-xs font-semibold transition flex items-center space-x-1.5 flex-shrink-0">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        <span>Wissel lid</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Hoofdinhoud -->
+  <main class="max-w-xl w-full mx-auto p-3 sm:p-5 flex-1 space-y-4">
+
+    <!-- Laadscherm -->
+    <div id="loading-view" class="bg-white rounded-xl p-8 shadow-sm border border-slate-200 text-center space-y-3">
+      <div class="w-9 h-9 border-4 border-[#1B2654] border-t-transparent rounded-full animate-spin mx-auto"></div>
+      <p class="text-xs sm:text-sm font-semibold text-slate-600">Gegevens laden...</p>
+    </div>
+
+    <!-- ========================================================== -->
+    <!-- STAP 1: INLOGGEN / EENMALIG PINCODE KIEZEN                 -->
+    <!-- ========================================================== -->
+    <div id="auth-view" class="hidden space-y-4">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="bg-[#1B2654] px-4 sm:px-5 py-3.5 text-white border-b-[3px] border-[#E30613] flex items-center space-x-3">
+          <div class="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
+            <svg class="w-4 h-4 text-[#BCE3F9]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+          </div>
+          <div>
+            <h2 class="text-sm sm:text-base font-extrabold uppercase tracking-wide">Inloggen</h2>
+            <p class="text-[11px] text-slate-300">Selecteer je naam en voer je 4-cijferige pincode in</p>
+          </div>
+        </div>
+
+        <div class="p-4 sm:p-5 space-y-4">
+          <!-- Sectie snelfilter -->
+          <div>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">1. Filter op sectie (optioneel)</label>
+            <div id="sectie-pills" class="flex flex-wrap gap-1.5"></div>
+          </div>
+
+          <!-- Naam selectie -->
+          <div>
+            <label for="login-member-select" class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">2. Selecteer jouw naam</label>
+            <select id="login-member-select" onchange="onSelectLoginMember()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+              <option value="">-- Kies je naam uit de lijst --</option>
+            </select>
+          </div>
+
+          <!-- Pincode Invoer / Pincode Aanmaken Box -->
+          <div id="pin-box" class="hidden pt-3 border-t border-slate-100 space-y-3">
+
+            <!-- Melding voor nieuwe pincode (1e keer) -->
+            <div id="pin-setup-banner" class="hidden bg-blue-50 border border-blue-200 rounded-lg p-3.5 text-xs text-[#1B2654] space-y-1">
+              <div class="font-bold">Eerste keer inloggen voor <span id="setup-member-name"></span></div>
+              <p class="text-slate-700 leading-relaxed">
+                Kies eenmalig een <strong>eigen 4-cijferige pincode</strong>. Hiermee blijft je persoonlijke overzicht afgeschermd.
+              </p>
+            </div>
+
+            <!-- Melding voor bestaande pincode -->
+            <div id="pin-login-banner" class="hidden bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-700">
+              Pincode voor <strong id="login-member-name" class="text-[#1B2654]"></strong>:
+            </div>
+
+            <div>
+              <label for="pin-input" id="pin-label" class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Jouw 4-cijferige pincode</label>
+              <input type="password" id="pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••"
+                onkeydown="if(event.key==='Enter') handleAuthSubmit()"
+                class="pin-input w-full text-center text-2xl font-bold bg-slate-50 border border-slate-300 rounded-lg py-2.5 text-[#1B2654] focus:outline-none focus:ring-2 focus:ring-[#28367B] focus:bg-white transition" />
+            </div>
+
+            <!-- Onthoud mij op dit toestel -->
+            <label class="flex items-center space-x-2.5 text-xs text-slate-600 cursor-pointer select-none pt-1">
+              <input type="checkbox" id="remember-device" checked class="w-4 h-4 rounded text-[#28367B] focus:ring-[#28367B]">
+              <span>Onthoud mij op deze telefoon</span>
+            </label>
+
+            <!-- Foutmelding bij pincode -->
+            <div id="auth-error" class="hidden bg-red-50 border border-red-200 text-red-800 text-xs font-semibold px-3.5 py-2.5 rounded-lg"></div>
+
+            <button id="auth-submit-btn" onclick="handleAuthSubmit()" class="w-full bg-[#1B2654] hover:bg-[#28367B] text-white font-bold uppercase tracking-wider py-3 rounded-lg shadow-sm transition flex items-center justify-center space-x-2 text-xs sm:text-sm">
+              <span id="auth-submit-text">Inloggen</span>
+            </button>
+
+            <p class="text-[11px] text-center text-slate-400">
+              Pincode vergeten? Neem even contact op met je sectiehoofd of het bestuur.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================== -->
+    <!-- STAP 2: PERSOONLIJK AFMELDSCHERM & EIGEN OVERZICHT         -->
+    <!-- ========================================================== -->
+    <div id="member-view" class="hidden space-y-3.5">
+
+      <!-- Compacte Ingelogd Lid Pill (past zich automatisch aan de lengte van de naam aan) -->
+      <div>
+        <div class="inline-flex items-center space-x-2 bg-white px-3.5 py-1.5 rounded-full shadow-xs border border-slate-200">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>
+          <span id="member-display-name" class="font-bold text-[#1B2654] text-xs sm:text-sm whitespace-nowrap"></span>
+        </div>
+      </div>
+
+      <!-- DUIDELIJKE TABBLADEN: Splits 'Afwezigheid doorgeven' en 'Mijn afmeldingen' -->
+      <div class="bg-slate-200/80 p-1 rounded-xl grid grid-cols-2 gap-1 border border-slate-300/60">
+        <button type="button" id="main-tab-report" onclick="switchMainTab('report')"
+          class="py-2.5 px-3 rounded-lg text-xs font-extrabold uppercase tracking-wider transition bg-[#1B2654] text-white shadow-sm flex items-center justify-center gap-1.5">
+          <span>Afwezigheid doorgeven</span>
+        </button>
+        <button type="button" id="main-tab-overview" onclick="switchMainTab('overview')"
+          class="py-2.5 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5">
+          <span>Mijn afmeldingen</span>
+          <span id="tab-active-count-badge" class="bg-slate-300 text-slate-800 text-[10px] font-extrabold px-1.5 py-0.2 rounded-full min-w-[18px] text-center">0</span>
+        </button>
+      </div>
+
+      <!-- Succes / Status Banner -->
+      <div id="status-banner" class="hidden rounded-xl p-3.5 sm:p-4 shadow-sm border text-xs font-semibold flex items-start justify-between gap-2.5">
+        <div id="status-banner-content" class="leading-relaxed"></div>
+        <button onclick="hideStatusBanner()" class="text-slate-400 hover:text-slate-600 font-bold text-sm leading-none">&times;</button>
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- TABBLAD 1: AFWEZIGHEID DOORGEVEN (STAP VOOR STAP)         -->
+      <!-- ======================================================== -->
+      <div id="tab-panel-report" class="bg-white rounded-xl p-4 sm:p-5 shadow-sm border border-slate-200 space-y-4 step-anim">
+
+        <!-- Koptekst + Stap-indicator -->
+        <div class="border-b border-slate-100 pb-3 flex items-center justify-between gap-2">
+          <div>
+            <h2 class="text-sm sm:text-base font-extrabold text-[#1B2654] uppercase tracking-wide">Afwezigheid doorgeven</h2>
+            <p id="form-step-subtitle" class="text-xs text-slate-500 mt-0.5">Stap 1 van 2 &bull; Selecteer de dag(en) waarop je verhinderd bent</p>
+          </div>
+          <div class="flex items-center space-x-1.5 flex-shrink-0">
+            <span id="step-dot-1" class="w-6 h-6 rounded-full bg-[#1B2654] text-white text-xs font-extrabold flex items-center justify-center">1</span>
+            <span class="text-slate-300 text-xs font-bold">&rarr;</span>
+            <span id="step-dot-2" class="w-6 h-6 rounded-full bg-slate-100 text-slate-400 border border-slate-200 text-xs font-extrabold flex items-center justify-center">2</span>
+          </div>
+        </div>
+
+        <!-- INGEKLAPTE SAMENVATTING VAN STAP 1 (Alleen zichtbaar als je in Stap 2 zit) -->
+        <div id="step1-summary-bar" class="hidden bg-slate-50 border border-slate-200 rounded-lg p-3 flex items-center justify-between gap-3 step-anim">
+          <div class="min-w-0">
+            <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-400">1. Gekozen dag(en)</span>
+            <div id="step1-summary-text" class="text-xs sm:text-sm font-bold text-[#1B2654] truncate mt-0.5">-</div>
+          </div>
+          <button type="button" onclick="goToFormStep(1)"
+            class="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-[#28367B] border border-slate-200 text-xs font-bold transition flex-shrink-0">
+            Wijzig datum
+          </button>
+        </div>
+
+        <!-- ====================================================== -->
+        <!-- FORMULIER STAP 1: DAG(EN) OF PERIODE KIEZEN            -->
+        <!-- ====================================================== -->
+        <div id="form-step-1" class="space-y-4 step-anim">
+          <div class="space-y-3">
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500">1. Op welke dag(en) kun je niet?</label>
+            <div class="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200">
+              <button type="button" id="mode-btn-single" onclick="setDateMode('single')"
+                class="py-2 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition bg-[#1B2654] text-white shadow-sm">
+                Losse dag(en)
+              </button>
+              <button type="button" id="mode-btn-period" onclick="setDateMode('period')"
+                class="py-2 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition text-slate-600 hover:text-slate-900">
+                Periode / Vakantie
+              </button>
+            </div>
+
+            <!-- MODUS A: LOSSE DAG(EN) -->
+            <div id="single-dates-box" class="space-y-2">
+              <div id="dates-container" class="space-y-2"></div>
+              <button type="button" onclick="addDateRow()" class="text-xs font-bold text-[#28367B] hover:text-[#1B2654] inline-flex items-center space-x-1 pt-0.5">
+                <span>+ Nog een datum toevoegen</span>
+              </button>
+            </div>
+
+            <!-- MODUS B: HELE PERIODE (VAN ... T/M ...) -->
+            <div id="period-dates-box" class="hidden bg-slate-50 border border-slate-200 rounded-lg p-3.5 space-y-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label for="period-start" class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Vanaf (eerste dag)</label>
+                  <input type="date" id="period-start" onchange="onPeriodRangeChange()"
+                    class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]" />
+                </div>
+                <div>
+                  <label for="period-end" class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Tot en met (laatste dag)</label>
+                  <input type="date" id="period-end" onchange="onPeriodRangeChange()"
+                    class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]" />
+                </div>
+              </div>
+            </div>
+
+            <!-- LIVE AGENDA CHECK RESULTAAT -->
+            <div class="bg-slate-50 rounded-lg p-3 sm:p-3.5 border border-slate-200 space-y-2">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-[#1B2654]">
+                  Geplande activiteiten op jouw keuze
+                </span>
+              </div>
+              <div id="matched-agenda-list" class="space-y-1.5 max-h-60 overflow-y-auto"></div>
+            </div>
+          </div>
+
+          <!-- Knop naar Stap 2 -->
+          <button type="button" onclick="goToFormStep(2)"
+            class="w-full bg-[#1B2654] hover:bg-[#28367B] text-white font-bold uppercase tracking-wider py-3.5 rounded-lg shadow-sm transition flex items-center justify-center space-x-2 text-xs sm:text-sm">
+            <span>Volgende stap: Reden &amp; toelichting</span>
+            <span>&rarr;</span>
+          </button>
+        </div>
+
+        <!-- ====================================================== -->
+        <!-- FORMULIER STAP 2: REDEN, TOELICHTING & BEVESTIGEN      -->
+        <!-- ====================================================== -->
+        <div id="form-step-2" class="hidden space-y-4 step-anim">
+          <!-- 2. Reden kiezen -->
+          <div>
+            <label for="form-reden" class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">2. Reden van afmelding <span class="text-[#E30613]">*</span></label>
+            <select id="form-reden" onchange="onRedenChange()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]">
+              <option value="">-- Selecteer een reden --</option>
+            </select>
+          </div>
+
+          <!-- 3. Toelichting (VERPLICHT VOOR ELKE AFMELDING) + Privé-vinkje -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label for="form-toelichting" class="block text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                3. Toelichting <span class="text-[#E30613]">*</span>
+              </label>
+              <span id="toelichting-hint" class="text-[11px] font-bold text-[#E30613]">Verplicht</span>
+            </div>
+            <textarea id="form-toelichting" rows="2" maxlength="500" placeholder="Geef een korte toelichting op je afmelding..."
+              class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]"></textarea>
+
+            <!-- Vinkje om toelichting alleen voor bestuur zichtbaar te maken -->
+            <label class="flex items-center space-x-2.5 text-xs text-slate-700 cursor-pointer select-none pt-0.5">
+              <input type="checkbox" id="form-prive-toelichting" class="w-4 h-4 rounded text-[#1B2654] focus:ring-[#28367B]">
+              <span>Toelichting bevat priv&eacute;-informatie (alleen zichtbaar voor het bestuur, niet voor sectiehoofden)</span>
+            </label>
+          </div>
+
+          <!-- 4. Bevestigingsvinkje + Korte zichtbaarheidsdisclaimer -->
+          <div class="space-y-2">
+            <label class="flex items-start space-x-2.5 bg-slate-50 p-3 rounded-lg border border-slate-200 cursor-pointer select-none">
+              <input type="checkbox" id="form-bevestiging" checked class="mt-0.5 w-4 h-4 rounded text-[#28367B] focus:ring-[#28367B]">
+              <span class="text-xs text-slate-600 leading-relaxed">
+                Ik weet dat deze melding wordt geregistreerd en meetelt in mijn aanwezigheidsoverzicht.
+              </span>
+            </label>
+            <p class="text-[11px] text-slate-500 px-1">
+              Afmeldingen en redenen zijn inzichtelijk voor het bestuur en de sectiehoofden.
+            </p>
+          </div>
+
+          <!-- Knoppen: Terug + Verzendknop -->
+          <div class="flex items-center gap-2.5 pt-1">
+            <button type="button" onclick="goToFormStep(1)"
+              class="px-4 py-3.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold uppercase tracking-wider text-xs transition flex-shrink-0">
+              &larr; Terug
+            </button>
+            <button type="button" id="submit-absence-btn" onclick="handleAbsenceSubmit()"
+              class="flex-1 bg-[#E30613] hover:bg-red-700 text-white font-bold uppercase tracking-wider py-3.5 rounded-lg shadow-sm transition flex items-center justify-center space-x-2 text-xs sm:text-sm">
+              <span id="submit-absence-text">Afwezigheid doorgeven</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- TABBLAD 2: MIJN GEREGISTREERDE AFMELDINGEN               -->
+      <!-- ======================================================== -->
+      <div id="tab-panel-overview" class="hidden bg-white rounded-xl p-4 sm:p-5 shadow-sm border border-slate-200 space-y-4 step-anim">
+        <div class="border-b border-slate-100 pb-3">
+          <h2 class="text-sm sm:text-base font-extrabold text-[#1B2654] uppercase tracking-wide">Mijn afmeldingen</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Jouw persoonlijke overzicht &bull; Je kunt een komende melding hier ook weer intrekken</p>
+        </div>
+
+        <!-- Komende afmeldingen -->
+        <div>
+          <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Komende datums</h3>
+          <div id="upcoming-absences-list" class="space-y-2.5"></div>
+        </div>
+
+        <!-- Eerdere afmeldingen (inklapbaar) -->
+        <div id="past-absences-wrapper" class="hidden pt-3 border-t border-slate-100">
+          <button type="button" onclick="togglePastAbsences()" class="text-xs font-bold text-slate-600 hover:text-[#1B2654] flex items-center space-x-1.5">
+            <span id="past-toggle-arrow" class="text-[10px]">&#9654;</span>
+            <span id="past-toggle-label">Toon eerdere afmeldingen (historie)</span>
+          </button>
+          <div id="past-absences-list" class="hidden mt-2.5 space-y-2"></div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Bevestigingsmodal voor intrekken MET VERPLICHTE REDEN -->
+  <div id="withdraw-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl max-w-md w-full overflow-hidden shadow-xl border border-slate-200 max-h-[90vh] flex flex-col">
+      <div class="bg-[#1B2654] px-4 sm:px-5 py-3.5 text-white border-b-[3px] border-[#E30613]">
+        <h3 class="text-sm sm:text-base font-extrabold uppercase tracking-wide">Afmelding intrekken</h3>
+        <p class="text-[11px] text-slate-300">Geef hieronder kort aan waarom je weer aanwezig kunt zijn</p>
+      </div>
+
+      <div class="p-4 sm:p-5 space-y-4 overflow-y-auto">
+        <p id="withdraw-modal-text" class="text-xs text-slate-700 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-200"></p>
+
+        <!-- Optioneel: andere komende datums tegelijk intrekken -->
+        <div id="withdraw-extra-dates-box" class="hidden space-y-1.5">
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Tegelijkertijd nog andere komende datums intrekken?
+          </label>
+          <div id="withdraw-extra-dates-list" class="max-h-32 overflow-y-auto space-y-1 bg-slate-50 p-2.5 rounded-lg border border-slate-200"></div>
+        </div>
+
+        <!-- Verplichte reden van intrekking -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label for="withdraw-reason-input" class="block text-[11px] font-bold uppercase tracking-wider text-slate-700">
+              Reden voor intrekking <span class="text-[#E30613]">*</span>
+            </label>
+            <span class="text-[10px] font-bold text-[#E30613]">Verplicht</span>
+          </div>
+          <textarea id="withdraw-reason-input" rows="2" maxlength="500" placeholder="Bijv. dienst kunnen ruilen, afspraak verzet, verkeerde datum gekozen..."
+            class="w-full bg-white border border-slate-300 rounded-lg px-3.5 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]"></textarea>
+          <p id="withdraw-error-msg" class="hidden text-xs font-semibold text-[#E30613] mt-1"></p>
+        </div>
+
+        <div class="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeWithdrawModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 transition">
+            Annuleren
+          </button>
+          <button type="button" id="confirm-withdraw-btn" onclick="confirmWithdraw()" class="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition">
+            Intrekken bevestigen
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="max-w-xl w-full mx-auto px-4 py-5 text-center text-[11px] text-slate-400 mt-auto">
+    <span class="font-bold text-[#1B2654] uppercase tracking-wider">KTK Kampen</span> &bull; Friendship. Music. Progress.
+  </footer>
+
+  <script>
+    // =========================================================================
+    // STATE & INITIALISATIE
+    // =========================================================================
+    const STORAGE_KEY = 'ktk_socie_member_session_v1';
+    let INIT_DATA = { leden: [], redenen: [], agenda: [] };
+    let SELECTED_SECTIE_FILTER = 'ALL';
+    let CURRENT_MEMBER = null; // { lidId, naam, sectie, pin }
+    let MEMBER_ABSENCES = [];
+    let DATE_MODE = 'single'; // 'single' of 'period'
+    let EXCLUDED_PERIOD_DATES = new Set();
+    let CURRENT_SUBMIT_DATES = [];
+    let PENDING_WITHDRAW = null;
+    let CURRENT_FORM_STEP = 1;
+
+    const PREVIEW_DATA = { leden: [], redenen: [], agenda: [] };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadInitialData();
+    });
+
+    function loadInitialData() {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(onInitDataLoaded)
+          .withFailureHandler(err => {
+            document.getElementById('loading-view').innerHTML =
+              '<p class="text-xs font-bold text-red-600">Fout bij laden: ' + escapeHtml(err.message || String(err)) + '</p>';
+          })
+          .getLedenInitData();
+      } else {
+        setTimeout(() => onInitDataLoaded(PREVIEW_DATA), 200);
+      }
+    }
+
+    function onInitDataLoaded(data) {
+      INIT_DATA = data || { leden: [], redenen: [], agenda: [] };
+      populateRedenenDropdown();
+      renderSectiePills();
+      populateMemberDropdown();
+
+      try {
+        const savedRaw = localStorage.getItem(STORAGE_KEY);
+        if (savedRaw) {
+          const saved = JSON.parse(savedRaw);
+          if (saved && saved.lidId && saved.pin) {
+            attemptAutoLogin(saved.lidId, saved.pin);
+            return;
+          }
+        }
+      } catch (e) {}
+
+      showAuthView();
+    }
+
+    function showAuthView() {
+      document.getElementById('loading-view').classList.add('hidden');
+      document.getElementById('member-view').classList.add('hidden');
+      document.getElementById('header-logout-btn').classList.add('hidden');
+      document.getElementById('auth-view').classList.remove('hidden');
+    }
+
+    function showMemberView() {
+      document.getElementById('loading-view').classList.add('hidden');
+      document.getElementById('auth-view').classList.add('hidden');
+      document.getElementById('member-view').classList.remove('hidden');
+      document.getElementById('header-logout-btn').classList.remove('hidden');
+
+      if (CURRENT_MEMBER) {
+        document.getElementById('member-display-name').textContent = CURRENT_MEMBER.naam;
+      }
+
+      switchMainTab('report');
+      resetAbsenceForm();
+      renderMemberAbsences();
+    }
+
+    // =========================================================================
+    // TABBLADEN & FORMULIER-STAPPEN
+    // =========================================================================
+    function switchMainTab(tab) {
+      const btnReport = document.getElementById('main-tab-report');
+      const btnOverview = document.getElementById('main-tab-overview');
+      const badge = document.getElementById('tab-active-count-badge');
+      const panelReport = document.getElementById('tab-panel-report');
+      const panelOverview = document.getElementById('tab-panel-overview');
+
+      if (tab === 'overview') {
+        btnOverview.className = 'py-2.5 px-3 rounded-lg text-xs font-extrabold uppercase tracking-wider transition bg-[#1B2654] text-white shadow-sm flex items-center justify-center gap-1.5';
+        btnReport.className = 'py-2.5 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5';
+        badge.className = 'bg-white text-[#1B2654] text-[10px] font-extrabold px-1.5 py-0.2 rounded-full min-w-[18px] text-center';
+        panelReport.classList.add('hidden');
+        panelOverview.classList.remove('hidden');
+      } else {
+        btnReport.className = 'py-2.5 px-3 rounded-lg text-xs font-extrabold uppercase tracking-wider transition bg-[#1B2654] text-white shadow-sm flex items-center justify-center gap-1.5';
+        btnOverview.className = 'py-2.5 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5';
+        badge.className = 'bg-slate-300 text-slate-800 text-[10px] font-extrabold px-1.5 py-0.2 rounded-full min-w-[18px] text-center';
+        panelOverview.classList.add('hidden');
+        panelReport.classList.remove('hidden');
+      }
+    }
+
+    function goToFormStep(step) {
+      hideStatusBanner();
+
+      if (step === 2) {
+        refreshMatchedAgendaList();
+        const isPeriod = (DATE_MODE === 'period');
+        const sVal = document.getElementById('period-start').value;
+        const eVal = document.getElementById('period-end').value;
+
+        if (isPeriod && (!sVal || !eVal || eVal < sVal)) {
+          showStatusBanner('Kies eerst een geldige start- en einddatum voor de periode.', true);
+          return;
+        }
+        if (isPeriod) {
+          const sParts = sVal.split('-');
+          const eParts = eVal.split('-');
+          const sDate = new Date(Number(sParts[0]), Number(sParts[1]) - 1, Number(sParts[2]));
+          const eDate = new Date(Number(eParts[0]), Number(eParts[1]) - 1, Number(eParts[2]));
+          const diffDays = Math.round((eDate.getTime() - sDate.getTime()) / 86400000);
+          if (diffDays > 366) {
+            showStatusBanner('Een periode mag maximaal 1 jaar (366 dagen) lang zijn.', true);
+            return;
+          }
+        }
+        if (!isPeriod && CURRENT_SUBMIT_DATES.length === 0) {
+          showStatusBanner('Kies eerst minimaal &eacute;&eacute;n datum.', true);
+          return;
+        }
+        if (!isPeriod) {
+          const duplicateDates = CURRENT_SUBMIT_DATES.filter(d => isMemberAlreadyAbsentOnDate(d));
+          if (duplicateDates.length > 0) {
+            if (duplicateDates.length === 1) {
+              showStatusBanner('Je bent al afgemeld voor <strong>' + escapeHtml(formatDutchDate(duplicateDates[0])) + '</strong>.', true);
+            } else {
+              showStatusBanner('Je bent al afgemeld voor: <strong>' + duplicateDates.map(d => escapeHtml(formatDutchDate(d))).join(', ') + '</strong>.', true);
+            }
+            return;
+          }
+        }
+
+        const summaryTextEl = document.getElementById('step1-summary-text');
+        if (isPeriod) {
+          summaryTextEl.textContent = `Periode: ${formatDutchDate(sVal)} t/m ${formatDutchDate(eVal)}`;
+        } else if (CURRENT_SUBMIT_DATES.length === 1) {
+          const dStr = CURRENT_SUBMIT_DATES[0];
+          const ev = findAgendaEventForMember(dStr);
+          summaryTextEl.textContent = ev
+            ? `${formatDutchDate(dStr)} • ${ev.titel}`
+            : `${formatDutchDate(dStr)} (Vooraankondiging)`;
+        } else {
+          summaryTextEl.textContent = `${CURRENT_SUBMIT_DATES.length} datums geselecteerd (${CURRENT_SUBMIT_DATES.map(d => formatShortDayMonth(d)).join(', ')})`;
+        }
+
+        CURRENT_FORM_STEP = 2;
+        document.getElementById('form-step-1').classList.add('hidden');
+        document.getElementById('step1-summary-bar').classList.remove('hidden');
+        document.getElementById('form-step-2').classList.remove('hidden');
+        document.getElementById('form-step-subtitle').innerHTML = 'Stap 2 van 2 &bull; Geef je reden en een korte toelichting op';
+        document.getElementById('step-dot-1').className = 'w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-extrabold flex items-center justify-center';
+        document.getElementById('step-dot-1').innerHTML = '&#10003;';
+        document.getElementById('step-dot-2').className = 'w-6 h-6 rounded-full bg-[#1B2654] text-white text-xs font-extrabold flex items-center justify-center';
+      } else {
+        CURRENT_FORM_STEP = 1;
+        document.getElementById('form-step-2').classList.add('hidden');
+        document.getElementById('step1-summary-bar').classList.add('hidden');
+        document.getElementById('form-step-1').classList.remove('hidden');
+        document.getElementById('form-step-subtitle').innerHTML = 'Stap 1 van 2 &bull; Selecteer de dag(en) waarop je verhinderd bent';
+        document.getElementById('step-dot-1').className = 'w-6 h-6 rounded-full bg-[#1B2654] text-white text-xs font-extrabold flex items-center justify-center';
+        document.getElementById('step-dot-1').textContent = '1';
+        document.getElementById('step-dot-2').className = 'w-6 h-6 rounded-full bg-slate-100 text-slate-400 border border-slate-200 text-xs font-extrabold flex items-center justify-center';
+      }
+    }
+
+    // =========================================================================
+    // STAP 1: INLOGGEN & PINCODE LOGICA
+    // =========================================================================
+    function renderSectiePills() {
+      const container = document.getElementById('sectie-pills');
+      const secties = ['ALL'];
+      INIT_DATA.leden.forEach(l => {
+        if (l.sectie && l.sectie !== 'X' && !secties.includes(l.sectie)) {
+          secties.push(l.sectie);
+        }
+      });
+
+      container.innerHTML = secties.map(sec => {
+        const active = (sec === SELECTED_SECTIE_FILTER);
+        const label = (sec === 'ALL') ? 'Alle secties' : sec;
+        const cls = active
+          ? 'bg-[#1B2654] text-white border-[#1B2654]'
+          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100';
+        return `<button type="button" onclick="setSectieFilter('${escapeAttr(sec)}')" class="px-2.5 py-1 rounded-md text-xs font-semibold border transition ${cls}">${escapeHtml(label)}</button>`;
+      }).join('');
+    }
+
+    function setSectieFilter(sec) {
+      SELECTED_SECTIE_FILTER = sec;
+      renderSectiePills();
+      populateMemberDropdown();
+      document.getElementById('pin-box').classList.add('hidden');
+    }
+
+    function populateMemberDropdown() {
+      const select = document.getElementById('login-member-select');
+      const filtered = INIT_DATA.leden
+        .filter(l => SELECTED_SECTIE_FILTER === 'ALL' || l.sectie === SELECTED_SECTIE_FILTER)
+        .sort((a, b) => a.naam.localeCompare(b.naam, 'nl'));
+
+      let html = '<option value="">-- Kies je naam (' + filtered.length + ' leden) --</option>';
+      filtered.forEach(l => {
+        html += `<option value="${escapeAttr(l.lidId)}">${escapeHtml(l.naam)} (${escapeHtml(l.sectie)})</option>`;
+      });
+      select.innerHTML = html;
+    }
+
+    function onSelectLoginMember() {
+      const lidId = document.getElementById('login-member-select').value;
+      const pinBox = document.getElementById('pin-box');
+      const errBox = document.getElementById('auth-error');
+      errBox.classList.add('hidden');
+
+      if (!lidId) {
+        pinBox.classList.add('hidden');
+        return;
+      }
+
+      const member = INIT_DATA.leden.find(l => l.lidId === lidId);
+      if (!member) return;
+
+      pinBox.classList.remove('hidden');
+      const pinInput = document.getElementById('pin-input');
+      pinInput.value = '';
+
+      if (member.hasPin) {
+        document.getElementById('pin-setup-banner').classList.add('hidden');
+        document.getElementById('pin-login-banner').classList.remove('hidden');
+        document.getElementById('login-member-name').textContent = member.naam;
+        document.getElementById('pin-label').textContent = 'Voer je 4-cijferige pincode in';
+        document.getElementById('auth-submit-text').textContent = 'Inloggen';
+      } else {
+        document.getElementById('pin-login-banner').classList.add('hidden');
+        document.getElementById('pin-setup-banner').classList.remove('hidden');
+        document.getElementById('setup-member-name').textContent = member.naam;
+        document.getElementById('pin-label').textContent = 'Kies een eigen 4-cijferige pincode';
+        document.getElementById('auth-submit-text').textContent = 'Pincode opslaan & Inloggen';
+      }
+
+      setTimeout(() => pinInput.focus(), 50);
+    }
+
+    function handleAuthSubmit() {
+      const lidId = document.getElementById('login-member-select').value;
+      const pin = (document.getElementById('pin-input').value || '').trim();
+      const errBox = document.getElementById('auth-error');
+      errBox.classList.add('hidden');
+
+      if (!lidId) return;
+      if (!/^\d{4}$/.test(pin)) {
+        errBox.textContent = 'Voer een pincode in van exact 4 cijfers (bijv. 1234).';
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      const member = INIT_DATA.leden.find(l => l.lidId === lidId);
+      if (!member) return;
+
+      const btn = document.getElementById('auth-submit-btn');
+      const btnText = document.getElementById('auth-submit-text');
+      btn.disabled = true;
+      btnText.textContent = 'Bezig met controleren...';
+
+      const onSuccess = (res) => {
+        btn.disabled = false;
+        member.hasPin = true;
+        CURRENT_MEMBER = {
+          lidId: res.member.lidId,
+          naam: res.member.naam,
+          sectie: res.member.sectie,
+          pin: pin
+        };
+        MEMBER_ABSENCES = res.afmeldingen || [];
+
+        if (document.getElementById('remember-device').checked) {
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(CURRENT_MEMBER));
+          } catch (e) {}
+        }
+        showMemberView();
+      };
+
+      const onFailure = (err) => {
+        btn.disabled = false;
+        btnText.textContent = member.hasPin ? 'Inloggen' : 'Pincode opslaan & Inloggen';
+        errBox.textContent = (err && err.message) ? err.message : String(err);
+        errBox.classList.remove('hidden');
+      };
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        if (member.hasPin) {
+          google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onFailure).loginMember(lidId, pin);
+        } else {
+          google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onFailure).setupMemberPin(lidId, pin);
+        }
+      } else {
+        setTimeout(() => {
+          const demoPins = JSON.parse(localStorage.getItem('ktk_demo_pins_v1') || '{}');
+          if (member.hasPin && demoPins[lidId] && demoPins[lidId] !== pin) {
+            onFailure({ message: 'Onjuiste pincode. Probeer het opnieuw.' });
+            return;
+          }
+          demoPins[lidId] = pin;
+          localStorage.setItem('ktk_demo_pins_v1', JSON.stringify(demoPins));
+          const allDemoAfm = getPreviewAllAbsences();
+          const myAfm = allDemoAfm.filter(a => a.lidId === lidId || a.naam === member.naam);
+          onSuccess({
+            ok: true,
+            member: { lidId: member.lidId, naam: member.naam, sectie: member.sectie },
+            afmeldingen: myAfm
+          });
+        }, 250);
+      }
+    }
+
+    function attemptAutoLogin(lidId, pin) {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(res => {
+            CURRENT_MEMBER = {
+              lidId: res.member.lidId,
+              naam: res.member.naam,
+              sectie: res.member.sectie,
+              pin: pin
+            };
+            MEMBER_ABSENCES = res.afmeldingen || [];
+            showMemberView();
+          })
+          .withFailureHandler(() => {
+            try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+            showAuthView();
+          })
+          .loginMember(lidId, pin);
+      } else {
+        const member = INIT_DATA.leden.find(l => l.lidId === lidId);
+        if (!member) {
+          showAuthView();
+          return;
+        }
+        CURRENT_MEMBER = { lidId: member.lidId, naam: member.naam, sectie: member.sectie, pin: pin };
+        const allDemoAfm = getPreviewAllAbsences();
+        MEMBER_ABSENCES = allDemoAfm.filter(a => a.lidId === lidId || a.naam === member.naam);
+        showMemberView();
+      }
+    }
+
+    function logoutMember() {
+      CURRENT_MEMBER = null;
+      MEMBER_ABSENCES = [];
+      try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+      document.getElementById('login-member-select').value = '';
+      document.getElementById('pin-box').classList.add('hidden');
+      hideStatusBanner();
+      showAuthView();
+    }
+
+    // =========================================================================
+    // STAP 2: AGENDA MATCHING & FORMULIER LOGICA
+    // =========================================================================
+    function populateRedenenDropdown() {
+      const sel = document.getElementById('form-reden');
+      let html = '<option value="">-- Selecteer een reden --</option>';
+      (INIT_DATA.redenen || []).forEach(r => {
+        html += `<option value="${escapeAttr(r)}">${escapeHtml(r)}</option>`;
+      });
+      sel.innerHTML = html;
+    }
+
+    function isMemberAlreadyAbsentOnDate(datumStr) {
+      return (MEMBER_ABSENCES || []).some(a => a.datum === datumStr);
+    }
+
+    function findAgendaEventForMember(datumStr) {
+      if (!CURRENT_MEMBER || !datumStr) return null;
+      const secLow = String(CURRENT_MEMBER.sectie || '').trim().toLowerCase();
+      const isSlagwerk = (secLow === 'slagwerk');
+      const isBrass = ['trompet', 'mellofoon', 'bariton', 'trombone', 'sousafoon'].indexOf(secLow) !== -1;
+
+      const matches = (INIT_DATA.agenda || []).filter(ev => {
+        if (ev.datum !== datumStr) return false;
+        const tLow = String(ev.titel || '').trim().toLowerCase();
+        const fb = String(ev.doelgroep || 'all').trim().toLowerCase();
+        const hasSlagwerk = tLow.indexOf('drumline') !== -1 || tLow.indexOf('slagwerk') !== -1 || tLow.indexOf('percussie') !== -1 || tLow.indexOf('drums') !== -1;
+        const hasBrass = tLow.indexOf('brass') !== -1 || tLow.indexOf('blazers') !== -1;
+        let dg = 'all';
+        if (hasSlagwerk && hasBrass) dg = 'all';
+        else if (hasSlagwerk && !hasBrass) dg = 'slagwerk';
+        else if (hasBrass && !hasSlagwerk) dg = 'brass';
+        else if (fb === 'slagwerk' || fb === 'brass') dg = fb;
+
+        if (dg === 'all') return true;
+        if (dg === 'slagwerk') return isSlagwerk;
+        if (dg === 'brass') return isBrass;
+        return true;
+      });
+
+      if (matches.length === 0) return null;
+      const optredenMatch = matches.find(m => m.type === 'Optreden');
+      return optredenMatch || matches[0];
+    }
+
+    function getNextUpcomingEventDateForMember() {
+      const todayStr = getDefaultNextDateStr();
+      const agenda = INIT_DATA.agenda || [];
+      for (let i = 0; i < agenda.length; i++) {
+        if (agenda[i].datum >= todayStr && !isMemberAlreadyAbsentOnDate(agenda[i].datum)) {
+          const ev = findAgendaEventForMember(agenda[i].datum);
+          if (ev) return ev.datum;
+        }
+      }
+      return todayStr;
+    }
+
+    function setDateMode(mode) {
+      DATE_MODE = mode;
+      EXCLUDED_PERIOD_DATES = new Set();
+      const btnSingle = document.getElementById('mode-btn-single');
+      const btnPeriod = document.getElementById('mode-btn-period');
+      const boxSingle = document.getElementById('single-dates-box');
+      const boxPeriod = document.getElementById('period-dates-box');
+
+      if (mode === 'single') {
+        btnSingle.className = 'py-2 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition bg-[#1B2654] text-white shadow-sm';
+        btnPeriod.className = 'py-2 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition text-slate-600 hover:text-slate-900';
+        boxSingle.classList.remove('hidden');
+        boxPeriod.classList.add('hidden');
+      } else {
+        btnPeriod.className = 'py-2 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition bg-[#1B2654] text-white shadow-sm';
+        btnSingle.className = 'py-2 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition text-slate-600 hover:text-slate-900';
+        boxSingle.classList.add('hidden');
+        boxPeriod.classList.remove('hidden');
+      }
+      refreshMatchedAgendaList();
+    }
+
+    function onPeriodRangeChange() {
+      EXCLUDED_PERIOD_DATES = new Set();
+      refreshMatchedAgendaList();
+    }
+
+    function togglePeriodEventDate(datumStr) {
+      if (EXCLUDED_PERIOD_DATES.has(datumStr)) {
+        EXCLUDED_PERIOD_DATES.delete(datumStr);
+      } else {
+        EXCLUDED_PERIOD_DATES.add(datumStr);
+      }
+      refreshMatchedAgendaList();
+    }
+
+    function refreshMatchedAgendaList() {
+      const listEl = document.getElementById('matched-agenda-list');
+      CURRENT_SUBMIT_DATES = [];
+
+      if (DATE_MODE === 'single') {
+        const inputs = Array.from(document.querySelectorAll('.date-input-field'));
+        const chosenDates = [...new Set(inputs.map(i => (i.value || '').trim()).filter(Boolean))].sort();
+
+        if (chosenDates.length === 0) {
+          listEl.innerHTML = '<p class="text-xs text-slate-400 italic">Kies hierboven een datum...</p>';
+          return;
+        }
+
+        CURRENT_SUBMIT_DATES = chosenDates.slice();
+        const rowsHtml = [];
+
+        chosenDates.forEach(dStr => {
+          const alreadyAbsent = isMemberAlreadyAbsentOnDate(dStr);
+          const ev = findAgendaEventForMember(dStr);
+
+          if (alreadyAbsent) {
+            rowsHtml.push(`
+              <div class="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-900 space-y-1">
+                <div class="flex flex-wrap items-center justify-between gap-1.5">
+                  <span class="font-bold text-[#E30613]">${escapeHtml(formatDutchDate(dStr))} &bull; Je bent al afgemeld</span>
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-red-100 text-[#E30613] border border-red-200">Reeds geregistreerd</span>
+                </div>
+                <p class="text-[11px] text-red-800 leading-relaxed">
+                  Je staat voor deze datum al afgemeld onder <em>Mijn afmeldingen</em>.
+                </p>
+              </div>
+            `);
+          } else if (ev) {
+            rowsHtml.push(renderMatchedAgendaRow(ev, false, true));
+          } else {
+            rowsHtml.push(`
+              <div class="p-3 rounded-lg bg-blue-50/70 border border-blue-200 text-xs text-slate-800 space-y-1">
+                <div class="flex flex-wrap items-center justify-between gap-1.5">
+                  <span class="font-bold text-[#1B2654]">${escapeHtml(formatDutchDate(dStr))}</span>
+                  <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-100 text-[#1B2654]">Vooraankondiging</span>
+                </div>
+                <p class="text-[11px] text-slate-600 leading-relaxed">
+                  Er staat op deze dag nog geen activiteit gepland. Je melding wordt alvast vastgelegd voor het geval er nog een repetitie of optreden op deze datum komt.
+                </p>
+              </div>
+            `);
+          }
+        });
+
+        listEl.innerHTML = rowsHtml.join('');
+      } else {
+        const startVal = document.getElementById('period-start').value;
+        const endVal = document.getElementById('period-end').value;
+
+        if (!startVal || !endVal) {
+          listEl.innerHTML = '<p class="text-xs text-slate-400 italic">Kies hierboven een start- en einddatum...</p>';
+          return;
+        }
+        if (endVal < startVal) {
+          listEl.innerHTML = '<p class="text-xs font-bold text-[#E30613]">De einddatum moet op of na de startdatum liggen.</p>';
+          return;
+        }
+
+        const sParts = startVal.split('-');
+        const eParts = endVal.split('-');
+        let cur = new Date(Number(sParts[0]), Number(sParts[1]) - 1, Number(sParts[2]), 12, 0, 0);
+        const end = new Date(Number(eParts[0]), Number(eParts[1]) - 1, Number(eParts[2]), 12, 0, 0);
+        const diffDays = Math.round((end.getTime() - cur.getTime()) / 86400000);
+
+        if (diffDays > 366) {
+          listEl.innerHTML = '<p class="text-xs font-bold text-[#E30613]">Een periode mag maximaal 1 jaar (366 dagen) lang zijn.</p>';
+          return;
+        }
+
+        const allPeriodEvents = [];
+        let steps = 0;
+        while (cur <= end && steps <= 366) {
+          const y = cur.getFullYear();
+          const m = String(cur.getMonth() + 1).padStart(2, '0');
+          const d = String(cur.getDate()).padStart(2, '0');
+          const dStr = `${y}-${m}-${d}`;
+          const ev = findAgendaEventForMember(dStr);
+          if (ev) {
+            allPeriodEvents.push(ev);
+            if (!EXCLUDED_PERIOD_DATES.has(dStr) && !isMemberAlreadyAbsentOnDate(dStr)) {
+              CURRENT_SUBMIT_DATES.push(dStr);
+            }
+          }
+          cur.setDate(cur.getDate() + 1);
+          steps++;
+        }
+
+        const periodNoticeHtml = `
+          <div class="p-3 rounded-lg bg-blue-50/70 border border-blue-200 text-xs text-slate-800 space-y-1">
+            <div class="flex flex-wrap items-center justify-between gap-1.5">
+              <span class="font-bold text-[#1B2654]">Periode ${escapeHtml(formatShortDayMonth(startVal))} t/m ${escapeHtml(formatShortDayMonth(endVal))}</span>
+            </div>
+            <p class="text-[11px] text-slate-600 leading-relaxed">
+              Deze periode wordt voor je vastgelegd, inclusief eventuele repetities of optredens die later nog binnen deze periode worden gepland.
+            </p>
+          </div>
+        `;
+
+        if (allPeriodEvents.length === 0) {
+          CURRENT_SUBMIT_DATES = [startVal];
+          listEl.innerHTML = periodNoticeHtml;
+        } else {
+          const eventsHtml = allPeriodEvents.map(ev => {
+            const isSelected = !EXCLUDED_PERIOD_DATES.has(ev.datum);
+            return renderMatchedAgendaRow(ev, true, isSelected);
+          }).join('');
+          listEl.innerHTML = eventsHtml + periodNoticeHtml;
+        }
+      }
+    }
+
+    function renderMatchedAgendaRow(ev, isToggleable, isSelected) {
+      const alreadyAbsent = isMemberAlreadyAbsentOnDate(ev.datum);
+      const isOpt = (ev.type === 'Optreden');
+      const typeBadge = isOpt
+        ? '<span class="bg-[#E30613] text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase">Optreden</span>'
+        : '<span class="bg-[#BCE3F9]/60 text-[#1B2654] text-[10px] font-bold px-2 py-0.5 rounded uppercase">Repetitie</span>';
+
+      if (alreadyAbsent) {
+        return `
+          <div class="p-2.5 rounded-lg border bg-slate-100 border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div class="flex items-start space-x-2 min-w-0">
+              <span class="w-2 h-2 rounded-full bg-slate-400 mt-1.5 flex-shrink-0"></span>
+              <div class="min-w-0">
+                <span class="font-bold text-slate-700 block sm:inline">${escapeHtml(formatDutchDate(ev.datum))}</span>
+                <span class="text-slate-500 block sm:inline sm:ml-1.5 truncate">${escapeHtml(ev.titel)}</span>
+              </div>
+            </div>
+            <div class="flex items-center space-x-1.5 flex-shrink-0 self-end sm:self-center">
+              ${typeBadge}
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-700">Al afgemeld</span>
+            </div>
+          </div>
+        `;
+      }
+
+      const opacityCls = isSelected ? 'bg-white border-slate-200' : 'bg-slate-100 border-slate-200 opacity-50 line-through';
+      const clickAttr = isToggleable ? `onclick="togglePeriodEventDate('${escapeAttr(ev.datum)}')"` : '';
+
+      return `
+        <div ${clickAttr} class="p-2.5 rounded-lg border ${opacityCls} flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs transition ${isToggleable ? 'hover:border-[#28367B] cursor-pointer' : ''}">
+          <div class="flex items-start space-x-2 min-w-0">
+            ${isToggleable ? `<span class="font-bold mt-0.5 ${isSelected ? 'text-[#1B2654]' : 'text-slate-400'}">${isSelected ? '&#9745;' : '&#9744;'}</span>` : '<span class="w-2 h-2 rounded-full bg-[#1B2654] mt-1.5 flex-shrink-0"></span>'}
+            <div class="min-w-0">
+              <span class="font-bold text-slate-900 block sm:inline">${escapeHtml(formatDutchDate(ev.datum))}</span>
+              <span class="text-slate-500 block sm:inline sm:ml-1.5 truncate">${escapeHtml(ev.titel)}</span>
+            </div>
+          </div>
+          <div class="flex items-center space-x-1.5 flex-shrink-0 self-end sm:self-center">
+            ${typeBadge}
+          </div>
+        </div>
+      `;
+    }
+
+    function resetAbsenceForm() {
+      const container = document.getElementById('dates-container');
+      container.innerHTML = '';
+      const nextEventDate = getNextUpcomingEventDateForMember();
+      addDateRow(nextEventDate);
+
+      const todayStr = getDefaultNextDateStr();
+      document.getElementById('period-start').value = todayStr;
+      const dEnd = new Date();
+      dEnd.setDate(dEnd.getDate() + 21);
+      const y = dEnd.getFullYear();
+      const m = String(dEnd.getMonth() + 1).padStart(2, '0');
+      const day = String(dEnd.getDate()).padStart(2, '0');
+      document.getElementById('period-end').value = `${y}-${m}-${day}`;
+
+      setDateMode('single');
+      document.getElementById('form-reden').value = '';
+      document.getElementById('form-toelichting').value = '';
+      document.getElementById('form-prive-toelichting').checked = false;
+      document.getElementById('form-bevestiging').checked = true;
+      onRedenChange();
+      goToFormStep(1);
+    }
+
+    function getDefaultNextDateStr() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function addDateRow(initialVal) {
+      const container = document.getElementById('dates-container');
+      const rowId = 'date-row-' + Math.random().toString(36).substring(2, 8);
+      const isFirst = container.children.length === 0;
+
+      const div = document.createElement('div');
+      div.id = rowId;
+      div.className = 'flex items-center gap-2';
+      div.innerHTML = `
+        <input type="date" value="${escapeAttr(initialVal || '')}" onchange="refreshMatchedAgendaList()"
+          class="date-input-field flex-1 bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#28367B]" />
+        ${!isFirst ? `<button type="button" onclick="document.getElementById('${rowId}').remove(); refreshMatchedAgendaList();" class="p-2 text-slate-400 hover:text-[#E30613] font-bold text-base leading-none" title="Verwijder datum">&times;</button>` : ''}
+      `;
+      container.appendChild(div);
+      refreshMatchedAgendaList();
+    }
+
+    function onRedenChange() {
+      const reden = document.getElementById('form-reden').value;
+      const hint = document.getElementById('toelichting-hint');
+      const textarea = document.getElementById('form-toelichting');
+      const rLow = String(reden || '').toLowerCase();
+
+      if (rLow.indexOf('eerder') !== -1 || rLow.indexOf('later') !== -1) {
+        hint.textContent = 'Verplicht (vermeld tijdstip)';
+        hint.className = 'text-[11px] font-bold text-orange-700';
+        textarea.placeholder = 'Vermeld de tijd: bijv. "Ik ben er vanaf 20:30 uur" of "Ik moet om 21:00 uur weg wegens..."';
+      } else {
+        hint.textContent = 'Verplicht';
+        hint.className = 'text-[11px] font-bold text-[#E30613]';
+        textarea.placeholder = 'Geef een korte toelichting op je afmelding (bijv. werktijden, studie-examen, bestemming)...';
+      }
+    }
+
+    function handleAbsenceSubmit() {
+      if (!CURRENT_MEMBER) return;
+
+      refreshMatchedAgendaList();
+      const isPeriod = (DATE_MODE === 'period');
+      const sVal = document.getElementById('period-start').value;
+      const eVal = document.getElementById('period-end').value;
+
+      if (isPeriod && (!sVal || !eVal || eVal < sVal)) {
+        showStatusBanner('Kies een geldige start- en einddatum voor de periode.', true);
+        return;
+      }
+      if (isPeriod) {
+        const sParts = sVal.split('-');
+        const eParts = eVal.split('-');
+        const sDate = new Date(Number(sParts[0]), Number(sParts[1]) - 1, Number(sParts[2]));
+        const eDate = new Date(Number(eParts[0]), Number(eParts[1]) - 1, Number(eParts[2]));
+        const diffDays = Math.round((eDate.getTime() - sDate.getTime()) / 86400000);
+        if (diffDays > 366) {
+          showStatusBanner('Een periode mag maximaal 1 jaar (366 dagen) lang zijn.', true);
+          return;
+        }
+      }
+      if (!isPeriod && CURRENT_SUBMIT_DATES.length === 0) {
+        showStatusBanner('Kies minimaal &eacute;&eacute;n datum.', true);
+        return;
+      }
+
+      if (!isPeriod) {
+        const duplicateDates = CURRENT_SUBMIT_DATES.filter(d => isMemberAlreadyAbsentOnDate(d));
+        if (duplicateDates.length > 0) {
+          if (duplicateDates.length === 1) {
+            showStatusBanner('Je bent al afgemeld voor <strong>' + escapeHtml(formatDutchDate(duplicateDates[0])) + '</strong>.', true);
+          } else {
+            showStatusBanner('Je bent al afgemeld voor: <strong>' + duplicateDates.map(d => escapeHtml(formatDutchDate(d))).join(', ') + '</strong>.', true);
+          }
+          return;
+        }
+      }
+
+      const reden = document.getElementById('form-reden').value;
+      const rawToelichting = (document.getElementById('form-toelichting').value || '').trim();
+      const priveToelichting = document.getElementById('form-prive-toelichting').checked;
+      const bevestiging = document.getElementById('form-bevestiging').checked;
+
+      if (!reden) {
+        showStatusBanner('Selecteer een reden voor je afmelding.', true);
+        return;
+      }
+      if (!rawToelichting) {
+        const rLow = reden.toLowerCase();
+        if (rLow.indexOf('eerder') !== -1 || rLow.indexOf('later') !== -1) {
+          showStatusBanner('Vul een toelichting in en geef aan vanaf of tot hoe laat je aanwezig bent.', true);
+        } else {
+          showStatusBanner('Vul een korte toelichting in bij je afmelding.', true);
+        }
+        document.getElementById('form-toelichting').focus();
+        return;
+      }
+      if (!bevestiging) {
+        showStatusBanner('Vink de bevestiging aan om je afmelding te kunnen versturen.', true);
+        return;
+      }
+
+      let periodPrefix = '';
+      if (isPeriod && sVal && eVal) {
+        periodPrefix = `[Periode ${formatShortDayMonth(sVal)} t/m ${formatShortDayMonth(eVal)}] `;
+      }
+      const finalToelichting = (periodPrefix && rawToelichting)
+        ? (periodPrefix + rawToelichting)
+        : (periodPrefix ? periodPrefix.trim() : rawToelichting);
+
+      const btn = document.getElementById('submit-absence-btn');
+      const btnText = document.getElementById('submit-absence-text');
+      btn.disabled = true;
+      btnText.textContent = 'Bezig met opslaan...';
+
+      const payload = {
+        lidId: CURRENT_MEMBER.lidId,
+        pin: CURRENT_MEMBER.pin,
+        datums: CURRENT_SUBMIT_DATES,
+        isPeriod: isPeriod,
+        periodStart: sVal,
+        periodEnd: eVal,
+        reden: reden,
+        toelichting: finalToelichting,
+        priveToelichting: priveToelichting
+      };
+
+      const onSuccess = (res) => {
+        btn.disabled = false;
+        btnText.textContent = 'Afwezigheid doorgeven';
+        MEMBER_ABSENCES = res.afmeldingen || [];
+        resetAbsenceForm();
+        renderMemberAbsences();
+
+        let msg = '';
+        if (res.activeCount > 0 && res.pendingCount > 0) {
+          msg = `Je afmelding voor <strong>${res.activeCount} geplande activiteit(en)</strong> en je gekozen periode zijn geregistreerd.`;
+        } else if (res.activeCount > 0) {
+          msg = `Je afmelding (${res.activeCount} activiteit${res.activeCount > 1 ? 'en' : ''}) is geregistreerd.`;
+        } else {
+          msg = `Je vooraankondiging is geregistreerd en wordt automatisch verwerkt zodra er op deze dag een repetitie of optreden in de agenda komt.`;
+        }
+        showStatusBanner(msg, false);
+      };
+
+      const onFailure = (err) => {
+        btn.disabled = false;
+        btnText.textContent = 'Afwezigheid doorgeven';
+        showStatusBanner(escapeHtml((err && err.message) ? err.message : String(err)), true);
+      };
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onFailure).submitMemberAbsence(payload);
+      } else {
+        setTimeout(() => {
+          const allDemoAfm = getPreviewAllAbsences();
+          const todayStr = getDefaultNextDateStr();
+          let activeCnt = 0;
+          let pendingCnt = 0;
+
+          CURRENT_SUBMIT_DATES.forEach(dStr => {
+            const ev = findAgendaEventForMember(dStr);
+            const idx = allDemoAfm.findIndex(a => (a.lidId === CURRENT_MEMBER.lidId || a.naam === CURRENT_MEMBER.naam) && a.datum === dStr);
+            if (idx !== -1) allDemoAfm.splice(idx, 1);
+
+            if (ev) {
+              activeCnt++;
+              allDemoAfm.push({
+                naam: CURRENT_MEMBER.naam,
+                lidId: CURRENT_MEMBER.lidId,
+                sectie: CURRENT_MEMBER.sectie,
+                type: ev.type,
+                datum: dStr,
+                reden: reden,
+                toelichting: finalToelichting,
+                priveToelichting: priveToelichting,
+                validiteit: (reden === 'Vakantie / Weekend weg' || reden === 'Sport / Andere vereniging') ? 'Niet acceptabel' : 'Geldig',
+                ingediend: todayStr,
+                isPendingAgenda: false
+              });
+            } else {
+              pendingCnt++;
+              allDemoAfm.push({
+                naam: CURRENT_MEMBER.naam,
+                lidId: CURRENT_MEMBER.lidId,
+                sectie: CURRENT_MEMBER.sectie,
+                type: isPeriod ? `Periode (${sVal} t/m ${eVal})` : 'Wacht op agenda',
+                datum: dStr,
+                reden: reden,
+                toelichting: finalToelichting,
+                priveToelichting: priveToelichting,
+                validiteit: 'Geldig',
+                ingediend: todayStr,
+                isPendingAgenda: true
+              });
+            }
+          });
+
+          savePreviewAllAbsences(allDemoAfm);
+          const myAfm = allDemoAfm.filter(a => a.lidId === CURRENT_MEMBER.lidId || a.naam === CURRENT_MEMBER.naam);
+          myAfm.sort((a, b) => (a.datum > b.datum ? 1 : -1));
+          onSuccess({ ok: true, activeCount: activeCnt, pendingCount: pendingCnt, afmeldingen: myAfm });
+        }, 300);
+      }
+    }
+
+    // =========================================================================
+    // STAP 3: MIJN AFMELDINGEN WEERGEVEN & INTREKKEN MET VERPLICHTE REDEN
+    // =========================================================================
+    function renderMemberAbsences() {
+      const todayStr = getDefaultNextDateStr();
+      const upcoming = MEMBER_ABSENCES.filter(a => a.datum >= todayStr);
+      const past = MEMBER_ABSENCES.filter(a => a.datum < todayStr).reverse();
+
+      const badgeEl = document.getElementById('tab-active-count-badge');
+      if (badgeEl) badgeEl.textContent = upcoming.length;
+
+      const upContainer = document.getElementById('upcoming-absences-list');
+      if (upcoming.length === 0) {
+        upContainer.innerHTML = `
+          <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
+            <p class="text-xs font-bold text-slate-700">Je hebt momenteel geen komende afmeldingen staan.</p>
+            <p class="text-[11px] text-slate-400 mt-0.5">Je staat voor alle aankomende repetities en optredens als aanwezig geregistreerd.</p>
+          </div>
+        `;
+      } else {
+        upContainer.innerHTML = upcoming.map(a => renderAbsenceCard(a, true)).join('');
+      }
+
+      const pastWrapper = document.getElementById('past-absences-wrapper');
+      const pastList = document.getElementById('past-absences-list');
+      if (past.length === 0) {
+        pastWrapper.classList.add('hidden');
+      } else {
+        pastWrapper.classList.remove('hidden');
+        document.getElementById('past-toggle-label').textContent = `Toon eerdere afmeldingen (${past.length})`;
+        pastList.innerHTML = past.map(a => renderAbsenceCard(a, false)).join('');
+      }
+    }
+
+    function renderAbsenceCard(a, canWithdraw) {
+      const isPending = Boolean(a.isPendingAgenda);
+      const isOpt = !isPending && (a.type || '').toLowerCase().includes('optreden');
+
+      let typeBadge = '';
+      if (isPending) {
+        typeBadge = '<span class="bg-orange-100 text-orange-900 border border-orange-300 text-[10px] font-semibold px-2 py-0.5 rounded">Voorbehoud (wacht op agenda)</span>';
+      } else if (isOpt) {
+        typeBadge = '<span class="bg-[#E30613] text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase">Optreden</span>';
+      } else {
+        typeBadge = '<span class="bg-[#BCE3F9]/60 text-[#1B2654] text-[10px] font-bold px-2 py-0.5 rounded uppercase">Repetitie</span>';
+      }
+
+      const priveBadge = a.priveToelichting
+        ? '<span class="bg-slate-200 text-slate-700 text-[10px] font-semibold px-2 py-0.5 rounded">Toelichting alleen bestuur</span>'
+        : '';
+
+      const ev = findAgendaEventForMember(a.datum);
+      const evTitle = ev ? ev.titel : '';
+
+      const borderLeftCls = isOpt
+        ? 'border-l-4 border-l-[#E30613]'
+        : isPending
+          ? 'border-l-4 border-l-orange-500'
+          : 'border-l-4 border-l-[#1B2654]';
+
+      return `
+        <div class="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 ${borderLeftCls} flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="space-y-1 min-w-0">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span class="font-bold text-xs sm:text-sm text-slate-900">${escapeHtml(formatDutchDate(a.datum))}</span>
+              ${typeBadge}
+              ${priveBadge}
+            </div>
+            ${evTitle ? `<div class="text-[11px] font-bold text-[#1B2654] truncate">${escapeHtml(evTitle)}</div>` : ''}
+            <div class="text-xs text-slate-600 break-words">
+              <span class="font-semibold text-slate-700">Reden:</span> ${escapeHtml(a.reden || '-')}
+              ${a.toelichting ? ` &bull; <span class="italic text-slate-500">"${escapeHtml(a.toelichting)}"</span>` : ''}
+            </div>
+          </div>
+
+          ${canWithdraw ? `
+            <button type="button" onclick="openWithdrawModal('${escapeAttr(a.datum)}', '${escapeAttr(a.type)}', '${escapeAttr(a.reden)}')"
+              class="self-start sm:self-center px-3 py-1.5 rounded-lg bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 text-xs font-bold transition flex items-center space-x-1.5 flex-shrink-0">
+              <span>Toch aanwezig</span>
+            </button>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    function togglePastAbsences() {
+      const list = document.getElementById('past-absences-list');
+      const arrow = document.getElementById('past-toggle-arrow');
+      if (list.classList.contains('hidden')) {
+        list.classList.remove('hidden');
+        arrow.innerHTML = '&#9660;';
+      } else {
+        list.classList.add('hidden');
+        arrow.innerHTML = '&#9654;';
+      }
+    }
+
+    function openWithdrawModal(datum, type, reden) {
+      PENDING_WITHDRAW = { datum, type, reden };
+      document.getElementById('withdraw-modal-text').innerHTML =
+        `Je staat op het punt om je afmelding voor <strong>${escapeHtml(formatDutchDate(datum))}</strong> in te trekken.`;
+
+      const reasonInput = document.getElementById('withdraw-reason-input');
+      reasonInput.value = '';
+      document.getElementById('withdraw-error-msg').classList.add('hidden');
+
+      const todayStr = getDefaultNextDateStr();
+      const otherUpcoming = MEMBER_ABSENCES.filter(a => a.datum >= todayStr && a.datum !== datum);
+      const extraBox = document.getElementById('withdraw-extra-dates-box');
+      const extraList = document.getElementById('withdraw-extra-dates-list');
+
+      if (otherUpcoming.length > 0) {
+        extraBox.classList.remove('hidden');
+        extraList.innerHTML = otherUpcoming.map(a => `
+          <label class="flex items-center space-x-2 text-xs text-slate-700 cursor-pointer py-0.5">
+            <input type="checkbox" class="withdraw-extra-cb rounded text-[#28367B]"
+              data-datum="${escapeAttr(a.datum)}"
+              data-type="${escapeAttr(a.type)}"
+              data-reden="${escapeAttr(a.reden)}" />
+            <span><strong>${escapeHtml(formatDutchDate(a.datum))}</strong> (${escapeHtml(a.reden)})</span>
+          </label>
+        `).join('');
+      } else {
+        extraBox.classList.add('hidden');
+        extraList.innerHTML = '';
+      }
+
+      document.getElementById('withdraw-modal').classList.remove('hidden');
+      setTimeout(() => reasonInput.focus(), 50);
+    }
+
+    function closeWithdrawModal() {
+      PENDING_WITHDRAW = null;
+      document.getElementById('withdraw-modal').classList.add('hidden');
+    }
+
+    function confirmWithdraw() {
+      if (!PENDING_WITHDRAW || !CURRENT_MEMBER) return;
+
+      const reasonInput = document.getElementById('withdraw-reason-input');
+      const errMsg = document.getElementById('withdraw-error-msg');
+      const redenIntrekking = (reasonInput.value || '').trim();
+
+      if (!redenIntrekking) {
+        errMsg.textContent = 'Vul een korte reden in waarom je deze afmelding intrekt.';
+        errMsg.classList.remove('hidden');
+        reasonInput.focus();
+        return;
+      }
+      errMsg.classList.add('hidden');
+
+      const items = [
+        { datum: PENDING_WITHDRAW.datum, type: PENDING_WITHDRAW.type, reden: PENDING_WITHDRAW.reden }
+      ];
+      document.querySelectorAll('.withdraw-extra-cb:checked').forEach(cb => {
+        items.push({
+          datum: cb.getAttribute('data-datum'),
+          type: cb.getAttribute('data-type'),
+          reden: cb.getAttribute('data-reden')
+        });
+      });
+
+      const btn = document.getElementById('confirm-withdraw-btn');
+      btn.disabled = true;
+      btn.textContent = 'Bezig...';
+
+      const payload = {
+        lidId: CURRENT_MEMBER.lidId,
+        pin: CURRENT_MEMBER.pin,
+        datum: PENDING_WITHDRAW.datum,
+        type: PENDING_WITHDRAW.type,
+        reden: PENDING_WITHDRAW.reden,
+        items: items,
+        redenIntrekking: redenIntrekking
+      };
+
+      const onSuccess = (res) => {
+        btn.disabled = false;
+        btn.textContent = 'Intrekken bevestigen';
+        closeWithdrawModal();
+        MEMBER_ABSENCES = res.afmeldingen || [];
+        resetAbsenceForm();
+        renderMemberAbsences();
+        const msg = items.length === 1
+          ? `Je afmelding voor <strong>${formatDutchDate(items[0].datum)}</strong> is ingetrokken.`
+          : `Je <strong>${items.length} afmeldingen</strong> zijn ingetrokken.`;
+        showStatusBanner(msg, false);
+      };
+
+      const onFailure = (err) => {
+        btn.disabled = false;
+        btn.textContent = 'Intrekken bevestigen';
+        closeWithdrawModal();
+        showStatusBanner('Kon afmelding niet intrekken: ' + escapeHtml((err && err.message) ? err.message : String(err)), true);
+      };
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onFailure).withdrawMemberAbsence(payload);
+      } else {
+        setTimeout(() => {
+          const allDemoAfm = getPreviewAllAbsences();
+          items.forEach(it => {
+            const idx = allDemoAfm.findIndex(a => (a.lidId === CURRENT_MEMBER.lidId || a.naam === CURRENT_MEMBER.naam) && a.datum === it.datum);
+            if (idx !== -1) allDemoAfm.splice(idx, 1);
+          });
+          savePreviewAllAbsences(allDemoAfm);
+          const myAfm = allDemoAfm.filter(a => a.lidId === CURRENT_MEMBER.lidId || a.naam === CURRENT_MEMBER.naam);
+          myAfm.sort((a, b) => (a.datum > b.datum ? 1 : -1));
+          onSuccess({ ok: true, afmeldingen: myAfm });
+        }, 250);
+      }
+    }
+
+    // =========================================================================
+    // HULPFUNCTIES
+    // =========================================================================
+    function showStatusBanner(htmlMsg, isError) {
+      const banner = document.getElementById('status-banner');
+      const content = document.getElementById('status-banner-content');
+      content.innerHTML = htmlMsg;
+      banner.className = isError
+        ? 'rounded-xl p-3.5 sm:p-4 shadow-sm border text-xs font-semibold flex items-start justify-between gap-2.5 bg-red-50 border-red-200 text-red-900'
+        : 'rounded-xl p-3.5 sm:p-4 shadow-sm border text-xs font-semibold flex items-start justify-between gap-2.5 bg-emerald-50 border-emerald-200 text-emerald-900';
+      banner.classList.remove('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function hideStatusBanner() {
+      document.getElementById('status-banner').classList.add('hidden');
+    }
+
+    function formatDutchDate(dateStr) {
+      if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr || '';
+      const parts = dateStr.split('-');
+      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      const dagen = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
+      const maanden = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+      return `${dagen[d.getDay()]} ${d.getDate()} ${maanden[d.getMonth()]} ${d.getFullYear()}`;
+    }
+
+    function formatShortDayMonth(dateStr) {
+      if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr || '';
+      const parts = dateStr.split('-');
+      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      const maanden = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+      return `${d.getDate()} ${maanden[d.getMonth()]}`;
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function escapeAttr(str) {
+      return escapeHtml(str).replace(/'/g, '&#39;');
+    }
+
+    function getPreviewAllAbsences() {
+      try {
+        const stored = localStorage.getItem('ktk_demo_afmeldingen_v1');
+        if (stored) return JSON.parse(stored);
+      } catch (e) {}
+      return (PREVIEW_DATA.demoAfmeldingen || []).slice();
+    }
+
+    function savePreviewAllAbsences(list) {
+      try {
+        localStorage.setItem('ktk_demo_afmeldingen_v1', JSON.stringify(list));
+      } catch (e) {}
+    }
+  </script>
+</body>
+</html>
+
