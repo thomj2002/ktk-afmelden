@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="nl">
 <head>
   <meta charset="UTF-8">
@@ -73,11 +73,13 @@
 
       const API_METHODS = [
         'getLedenInitData',
+        'getLedenInitAndLogin',
         'setupMemberPin',
         'loginMember',
         'submitMemberAbsence',
         'withdrawMemberAbsence',
         'getDashboardAuthInit',
+        'getDashboardAuthInitAndLogin',
         'setupDashboardPin',
         'loginDashboard',
         'getDashboardData',
@@ -1069,6 +1071,7 @@
 
   <script>
     const STORAGE_KEY = 'ktk_socie_member_session_v1';
+    const LOCAL_ADMINS_CACHE_KEY = 'ktk_dash_admin_cache_v1';
     let AUTH_INIT = null;
 
 
@@ -1105,18 +1108,97 @@
       return Boolean((DATA && DATA.isBestuur) || (CURRENT_ADMIN && CURRENT_ADMIN.isBestuur));
     }
 
-function initAuthFlow() {
+    function initAuthFlow() {
+      // 1. Direct hydrateren uit browser-cache voor 0ms vertraging bij tonen van accounts
+      try {
+        const cachedRaw = localStorage.getItem(LOCAL_ADMINS_CACHE_KEY);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached && Array.isArray(cached.admins) && cached.admins.length > 0) {
+            AUTH_INIT = cached;
+            populateAdminLoginDropdown();
+          }
+        }
+      } catch (e) {}
+
+      let saved = null;
+      try {
+        const savedRaw = localStorage.getItem(STORAGE_KEY);
+        if (savedRaw) saved = JSON.parse(savedRaw);
+      } catch (e) {}
+
+      if (saved && saved.lidId && saved.pin) {
+        if (AUTH_INIT && AUTH_INIT.admins) {
+          document.getElementById('dash-login-select').value = saved.lidId;
+          onSelectDashboardAdmin();
+          document.getElementById('dash-pin-input').value = saved.pin;
+          const btn = document.getElementById('dash-auth-btn');
+          const btnText = document.getElementById('dash-auth-btn-text');
+          if (btn) btn.disabled = true;
+          if (btnText) btnText.textContent = 'Bezig met inloggen...';
+        }
+
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(function(res) {
+              if (res) {
+                AUTH_INIT = { admins: res.admins || [] };
+                try { localStorage.setItem(LOCAL_ADMINS_CACHE_KEY, JSON.stringify(AUTH_INIT)); } catch (e) {}
+                populateAdminLoginDropdown();
+
+                if (res.autoLogin && res.autoLogin.ok) {
+                  CURRENT_ADMIN = {
+                    lidId: res.autoLogin.admin.lidId,
+                    naam: res.autoLogin.admin.naam,
+                    sectie: res.autoLogin.admin.sectie,
+                    rol: res.autoLogin.admin.rol,
+                    isBestuur: Boolean(res.autoLogin.admin.isBestuur),
+                    pin: saved.pin
+                  };
+                  DATA = res.autoLogin.dashboardData;
+                  showDashboardAfterAuth();
+                } else {
+                  try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+                  const btn = document.getElementById('dash-auth-btn');
+                  const btnText = document.getElementById('dash-auth-btn-text');
+                  if (btn) btn.disabled = false;
+                  if (btnText) btnText.textContent = 'Dashboard Openen';
+                  const banner = document.getElementById('dash-auth-unauthorized-banner');
+                  if (banner) banner.classList.remove('hidden');
+                }
+              }
+            })
+            .withFailureHandler(function(err) {
+              console.error("Fout bij auto-login:", err);
+              const btn = document.getElementById('dash-auth-btn');
+              const btnText = document.getElementById('dash-auth-btn-text');
+              if (btn) btn.disabled = false;
+              if (btnText) btnText.textContent = 'Dashboard Openen';
+              const errBox = document.getElementById('dash-auth-error');
+              if (errBox) {
+                errBox.textContent = (err && err.message) ? err.message : String(err);
+                errBox.classList.remove('hidden');
+              }
+            })
+            .getDashboardAuthInitAndLogin(saved.lidId, saved.pin);
+          return;
+        }
+      }
+
+      // Geen opgeslagen sessie: haal accounts op
       if (typeof google !== 'undefined' && google.script && google.script.run) {
         google.script.run
           .withSuccessHandler(function(res) {
             AUTH_INIT = res || { admins: [] };
+            try { localStorage.setItem(LOCAL_ADMINS_CACHE_KEY, JSON.stringify(AUTH_INIT)); } catch (e) {}
             populateAdminLoginDropdown();
-            tryAutoLoginDashboard();
           })
           .withFailureHandler(function(err) {
             console.error("Fout bij laden van accounts:", err);
-            AUTH_INIT = { admins: [] };
-            populateAdminLoginDropdown();
+            if (!AUTH_INIT || !AUTH_INIT.admins || AUTH_INIT.admins.length === 0) {
+              AUTH_INIT = { admins: [] };
+              populateAdminLoginDropdown();
+            }
           })
           .getDashboardAuthInit();
       } else {
