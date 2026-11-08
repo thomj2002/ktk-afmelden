@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="nl">
 <head>
   <meta charset="UTF-8">
@@ -66,11 +66,13 @@
 
       const API_METHODS = [
         'getLedenInitData',
+        'getLedenInitAndLogin',
         'setupMemberPin',
         'loginMember',
         'submitMemberAbsence',
         'withdrawMemberAbsence',
         'getDashboardAuthInit',
+        'getDashboardAuthInitAndLogin',
         'setupDashboardPin',
         'loginDashboard',
         'getDashboardData',
@@ -511,6 +513,7 @@
     // STATE & INITIALISATIE
     // =========================================================================
     const STORAGE_KEY = 'ktk_socie_member_session_v1';
+    const LOCAL_INIT_CACHE_KEY = 'ktk_leden_init_cache_v1';
     let INIT_DATA = { leden: [], redenen: [], agenda: [] };
     let SELECTED_SECTIE_FILTER = 'ALL';
     let CURRENT_MEMBER = null; // { lidId, naam, sectie, pin }
@@ -524,40 +527,118 @@
     const PREVIEW_DATA = { leden: [], redenen: [], agenda: [] };
 
     window.addEventListener('DOMContentLoaded', () => {
+      // 1. Hydrateer direct uit de browser-cache voor 0 vertraging bij het tonen van dropdowns
+      try {
+        const cachedRaw = localStorage.getItem(LOCAL_INIT_CACHE_KEY);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached && Array.isArray(cached.leden) && cached.leden.length > 0) {
+            INIT_DATA = cached;
+            populateRedenenDropdown();
+            renderSectiePills();
+            populateMemberDropdown();
+          }
+        }
+      } catch (e) {}
+
       loadInitialData();
     });
 
     function loadInitialData() {
+      let saved = null;
+      try {
+        const savedRaw = localStorage.getItem(STORAGE_KEY);
+        if (savedRaw) saved = JSON.parse(savedRaw);
+      } catch (e) {}
+
+      // Als we al een lokale basislijst hebben en de gebruiker is niet ingelogd, toon direct het inlogscherm (binnen 50ms)
+      if ((!saved || !saved.lidId || !saved.pin) && INIT_DATA && INIT_DATA.leden && INIT_DATA.leden.length > 0) {
+        showAuthView();
+      }
+
       if (typeof google !== 'undefined' && google.script && google.script.run) {
-        google.script.run
-          .withSuccessHandler(onInitDataLoaded)
-          .withFailureHandler(err => {
-            document.getElementById('loading-view').innerHTML =
-              '<p class="text-xs font-bold text-red-600">Fout bij laden: ' + escapeHtml(err.message || String(err)) + '</p>';
-          })
-          .getLedenInitData();
+        if (saved && saved.lidId && saved.pin) {
+          // Supersnelle gecombineerde aanroep: haalt init-data op én logt in 1 round-trip in
+          google.script.run
+            .withSuccessHandler(onInitAndLoginLoaded)
+            .withFailureHandler(err => {
+              if (INIT_DATA && INIT_DATA.leden && INIT_DATA.leden.length > 0) {
+                showAuthView();
+                showStatusBanner('Kon niet automatisch inloggen: ' + escapeHtml(err.message || String(err)), true);
+              } else {
+                document.getElementById('loading-view').innerHTML =
+                  '<p class="text-xs font-bold text-red-600">Fout bij laden: ' + escapeHtml(err.message || String(err)) + '</p>';
+              }
+            })
+            .getLedenInitAndLogin(saved.lidId, saved.pin);
+        } else {
+          google.script.run
+            .withSuccessHandler(onInitDataLoaded)
+            .withFailureHandler(err => {
+              if (INIT_DATA && INIT_DATA.leden && INIT_DATA.leden.length > 0) {
+                showAuthView();
+              } else {
+                document.getElementById('loading-view').innerHTML =
+                  '<p class="text-xs font-bold text-red-600">Fout bij laden: ' + escapeHtml(err.message || String(err)) + '</p>';
+              }
+            })
+            .getLedenInitData();
+        }
       } else {
         setTimeout(() => onInitDataLoaded(PREVIEW_DATA), 200);
       }
     }
 
-    function onInitDataLoaded(data) {
-      INIT_DATA = data || { leden: [], redenen: [], agenda: [] };
+    function onInitAndLoginLoaded(res) {
+      if (!res) {
+        showAuthView();
+        return;
+      }
+
+      INIT_DATA = {
+        leden: res.leden || [],
+        redenen: res.redenen || [],
+        agenda: res.agenda || []
+      };
+
+      try {
+        localStorage.setItem(LOCAL_INIT_CACHE_KEY, JSON.stringify(INIT_DATA));
+      } catch (e) {}
+
       populateRedenenDropdown();
       renderSectiePills();
       populateMemberDropdown();
 
+      if (res.autoLogin && res.autoLogin.ok) {
+        let savedPin = '';
+        try {
+          const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+          savedPin = s.pin || '';
+        } catch (e) {}
+
+        CURRENT_MEMBER = {
+          lidId: res.autoLogin.member.lidId,
+          naam: res.autoLogin.member.naam,
+          sectie: res.autoLogin.member.sectie,
+          pin: savedPin
+        };
+        MEMBER_ABSENCES = res.autoLogin.afmeldingen || [];
+        showMemberView();
+      } else {
+        try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+        showAuthView();
+      }
+    }
+
+    function onInitDataLoaded(data) {
+      INIT_DATA = data || { leden: [], redenen: [], agenda: [] };
       try {
-        const savedRaw = localStorage.getItem(STORAGE_KEY);
-        if (savedRaw) {
-          const saved = JSON.parse(savedRaw);
-          if (saved && saved.lidId && saved.pin) {
-            attemptAutoLogin(saved.lidId, saved.pin);
-            return;
-          }
-        }
+        localStorage.setItem(LOCAL_INIT_CACHE_KEY, JSON.stringify(INIT_DATA));
       } catch (e) {}
 
+      populateRedenenDropdown();
+      renderSectiePills();
+      populateMemberDropdown();
       showAuthView();
     }
 
