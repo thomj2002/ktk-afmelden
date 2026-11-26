@@ -4,8 +4,8 @@
   "description": "Aan- en afmelden voor repetities en optredens van het Kamper Trompetter Korps",
   "start_url": "./afmelden.html",
   "display": "standalone",
-  "background_color": "#1B2654",
-  "theme_color": "#1B2654",
+  "background_color": "#28367B",
+  "theme_color": "#28367B",
   "icons": [
     {
       "src": "https://admin.ktkkampen.nl/uploads/KTK-logos/logo.svg",
